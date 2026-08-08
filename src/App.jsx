@@ -7430,13 +7430,15 @@ function DetailDrawer({ payload, onClose }) {
 // App
 // ============================================================================
 export default function App() {
-  const [route, setRoute] = useState(DEV_AUTOLOGIN ? "app" : "landing");
+  // Auth removed: boot straight into the dashboard with a local guest user.
+  // Anonymous Firebase auth upgrades it in the background so saving works.
+  const [route, setRoute] = useState("app");
   const [authMode, setAuthMode] = useState("login");
-  const [user, setUser] = useState(DEV_AUTOLOGIN ? DEV_USER : null);
+  const [user, setUser] = useState(DEV_AUTOLOGIN ? DEV_USER : { name: "Founder", email: null, role: "Founder" });
   const [active, setActive] = useState("overview");
   const [mobileNav, setMobileNav] = useState(false);
   const [company, setCompany] = useState(DEV_AUTOLOGIN ? DEV_COMPANY : COMPANY_INIT);
-  const [authLoading, setAuthLoading] = useState(!DEV_AUTOLOGIN);
+  const [authLoading, setAuthLoading] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const fbRef = useRef(null);
 
