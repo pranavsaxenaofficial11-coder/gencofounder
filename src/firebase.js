@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs, addDoc, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 
 // ─── PASTE YOUR FIREBASE CONFIG HERE ────────────────────────────────────
@@ -37,6 +37,12 @@ export async function loginWithGoogle() {
   // Create or update user profile in Firestore
   await ensureUserDoc(user);
   return user;
+}
+
+export async function loginAnonymously() {
+  const result = await signInAnonymously(auth);
+  await ensureUserDoc(result.user);
+  return result.user;
 }
 
 export async function loginWithEmail(email, password) {
@@ -73,7 +79,7 @@ async function ensureUserDoc(user, role = "Founder") {
   if (!snap.exists()) {
     await setDoc(ref, {
       uid: user.uid,
-      name: user.displayName || user.email.split("@")[0],
+      name: user.displayName || (user.email ? user.email.split("@")[0] : "Founder"),
       email: user.email,
       photoURL: user.photoURL || null,
       role,

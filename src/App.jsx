@@ -7548,7 +7548,16 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const onAuth = (mode) => { setAuthMode(mode); setRoute("auth"); };
+  // Auth gate removed: Sign up / Log in buttons start an instant guest
+  // session (anonymous Firebase auth keeps a real uid so saving works).
+  const onAuth = async () => {
+    try {
+      const fb = fbRef.current || await import("./firebase.js");
+      await fb.loginAnonymously(); // onAuthChange routes into the app
+    } catch (e) {
+      alert("Couldn't start your session: " + (e?.message || e) + ". Enable Anonymous sign-in in Firebase Console → Authentication → Sign-in method.");
+    }
+  };
   const onLogin = async (u) => {
     // u comes from AuthPage — could be mock or real Firebase result
     if (u.uid) {
