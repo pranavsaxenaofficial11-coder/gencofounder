@@ -1,0 +1,17 @@
+# dependencies / build output
+node_modules/
+dist/
+
+# local secrets — NEVER commit these
+.dev.vars
+.dev*.vars
+*.vars
+*.local
+
+# logs & OS noise
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# wrangler local state
+.wrangler/
