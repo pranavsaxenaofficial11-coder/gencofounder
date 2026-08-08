@@ -7484,6 +7484,10 @@ export default function App() {
               setNeedsOnboarding(true);
             }
           } else {
+            // No user → start a guest session automatically and go straight
+            // to the dashboard. onAuthChange re-fires with the guest user.
+            try { await fb.loginAnonymously(); return; }
+            catch (e) { console.error("guest login failed:", e); }
             setUser(null);
             setRoute("landing");
           }
