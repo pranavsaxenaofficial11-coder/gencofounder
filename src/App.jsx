@@ -7493,15 +7493,17 @@ export default function App() {
             // to the dashboard. onAuthChange re-fires with the guest user.
             try { await fb.loginAnonymously(); return; }
             catch (e) { console.error("guest login failed:", e); }
-            setUser(null);
-            setRoute("landing");
+            // Even if guest login fails, stay on the dashboard with a local
+            // user — the landing/auth pages are never shown.
+            setUser({ name: "Founder", email: null, role: "Founder" });
+            setRoute("app");
           }
           setAuthLoading(false);
         });
       } catch (err) {
         console.error("Firebase failed to initialize:", err);
-        setUser(null);
-        setRoute("landing");
+        setUser({ name: "Founder", email: null, role: "Founder" });
+        setRoute("app");
         setAuthLoading(false);
       }
     })();
