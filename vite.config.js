@@ -9,8 +9,16 @@ export default defineConfig({
     // Cloudflare deployment (working functions + configured API key there).
     // `npm run preview` still serves the local functions via wrangler.
     proxy: {
+      // Chat → Cloudflare deployment (has a working AI key today).
+      // Once OPENROUTER_API_KEY is set on Vercel, both can point there.
+      "/api/chat": {
+        target: process.env.VITE_API_PROXY || "https://gencopilot.pages.dev",
+        changeOrigin: true,
+        secure: true,
+      },
+      // Everything else (news, market, contact, health) → Vercel.
       "/api": {
-        target: "https://gencopilot.pages.dev",
+        target: process.env.VITE_API_PROXY || "https://gencofounder.vercel.app",
         changeOrigin: true,
         secure: true,
       },

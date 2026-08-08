@@ -920,9 +920,12 @@ const NVIDIA_MODEL = import.meta.env.VITE_NVIDIA_MODEL || "z-ai/glm-5.2";
 // false in every production build, so this can never ship live. Set
 // VITE_DEV_AUTOLOGIN=0 to get the real login screen back while developing.
 // ---------------------------------------------------------------------------
+// Opt-in only (VITE_DEV_AUTOLOGIN=1): the mock dev user has no cloud uid, so
+// saves fail with it. Default localhost behavior now matches production —
+// instant dashboard with a real background guest session, saving works.
 const DEV_AUTOLOGIN =
   Boolean(import.meta.env.DEV) &&
-  String(import.meta.env.VITE_DEV_AUTOLOGIN ?? "1") !== "0";
+  String(import.meta.env.VITE_DEV_AUTOLOGIN ?? "0") === "1";
 
 const DEV_USER = {
   name: "Dev Founder",
