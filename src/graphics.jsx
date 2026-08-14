@@ -193,6 +193,15 @@ export function OpposingMarquee({ rows = 3, perRow = 8, speed = 34, className = 
       });
 
       // Scroll velocity -> shear + speed-up. Reads as one physical system.
+      // onUpdate stops firing the moment scrolling stops, so the last non-zero
+      // velocity would otherwise leave the field permanently sheared. A settle
+      // timer returns it to rest.
+      let settle;
+      const rest = () => {
+        gsap.to(el, { skewY: 0, duration: 0.7, ease: "power3.out", overwrite: true });
+        tweens.forEach((t) => gsap.to(t, { timeScale: 1, duration: 0.6, overwrite: true }));
+      };
+
       const st = ScrollTrigger.create({
         trigger: el,
         start: "top bottom",
@@ -201,10 +210,12 @@ export function OpposingMarquee({ rows = 3, perRow = 8, speed = 34, className = 
           const v = gsap.utils.clamp(-28, 28, self.getVelocity() / 90);
           gsap.to(el, { skewY: v * 0.16, overwrite: true, duration: 0.5, ease: "power3.out" });
           tweens.forEach((t) => gsap.to(t, { timeScale: 1 + Math.abs(v) / 26, duration: 0.4, overwrite: true }));
+          clearTimeout(settle);
+          settle = setTimeout(rest, 160);
         },
       });
 
-      return () => st.kill();
+      return () => { clearTimeout(settle); st.kill(); };
     }, root);
 
     return () => ctx.revert();
@@ -402,11 +413,16 @@ export function ScrubCounter({ to, prefix = "", suffix = "", decimals = 0, class
     if (prefersReduced()) { set(to); return; }
     const obj = { v: 0 };
     const ctx = gsap.context(() => {
+      // Counts up ONCE on entry and stays. Not scrubbed: these are fixed facts
+      // ("10 modules"), and a scrubbed tween runs backwards when you scroll up,
+      // so the band sat at 0 whenever the page was near the top — which is
+      // exactly where a full-page screenshot caught it.
       gsap.to(obj, {
         v: to,
-        ease: "none",
+        duration: 1.6,
+        ease: "power2.out",
         onUpdate: () => set(obj.v),
-        scrollTrigger: { trigger: el, start: "top 92%", end: "top 55%", scrub: 0.5 },
+        scrollTrigger: { trigger: el, start: "top 90%", once: true },
       });
     }, ref);
     return () => ctx.revert();

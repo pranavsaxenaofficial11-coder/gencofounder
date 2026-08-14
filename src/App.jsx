@@ -288,10 +288,16 @@ html, body { max-width:100%; overflow-x:hidden; }
 .lp-root .border-fuchsia-200{border-color:var(--brand-2)!important;}
 .lp-root .border-l-fuchsia-400{border-left-color:var(--brand-2)!important;}
 
-/* dark mode: brand-filled surfaces get light text */
-.lp-root.theme-dark .bg-violet-600{color:#fafafa!important;}
-.lp-root.theme-dark .bg-violet-700{color:#fafafa!important;}
-.lp-root.theme-dark .hover\:bg-violet-700:hover{color:#fafafa!important;}
+/* dark mode: brand-filled surfaces take the on-brand ink.
+   These hard-coded #fafafa, which was right when .bg-violet-600 was actually
+   violet. Under the monochrome layer that class fills with var(--brand) —
+   #ffffff in dark theme — so near-white text landed on a white plate at
+   1.04:1 (nav + hero "Sign Up Free", the CTA headline, footer "Join"). The
+   selector is (0,3,0), so it outranks the (0,2,0) brand-surface rule
+   regardless of source order. Point it at the token instead. */
+.lp-root.theme-dark .bg-violet-600{color:var(--brand-fg-on)!important;}
+.lp-root.theme-dark .bg-violet-700{color:var(--brand-fg-on)!important;}
+.lp-root.theme-dark .hover\:bg-violet-700:hover{color:var(--brand-fg-on)!important;}
 
 /* ---------- Recharts tooltip + axes (Jarvis dark) ------------------------- */
 .lp-root .recharts-default-tooltip{
@@ -375,7 +381,7 @@ html, body { max-width:100%; overflow-x:hidden; }
 .lp-root.theme-dark{
   color-scheme:dark;
   --bg:#0a0a0a; --surface:#0a0a0a; --surface-2:#171717; --surface-3:#232323;
-  --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#787878;
+  --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#8a8a8a;
   --border:#262626; --border-2:#ffffff;
   --grid:#1f1f1f;
   --shadow-sm:none; --shadow-md:none; --shadow-xl:none;
@@ -496,6 +502,10 @@ html, body { max-width:100%; overflow-x:hidden; }
   --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#787878;
   --border:#262626; --border-2:#ffffff; --grid:#1f1f1f;
   --brand-soft-bg:#171717; --brand-soft-2-bg:#1f1f1f;
+  /* --fg-faint was #787878, which is 4.48:1 on this #0a0a0a plate — just under
+     the 4.5 floor. .text-slate-300 maps here, so every footer link and the
+     footer body copy failed together. #8a8a8a clears it at ~5.7:1. */
+  --fg-faint:#8a8a8a;
   /* --brand MUST invert with the plate. Without this it stays light-theme
      ink (#0a0a0a) and every brand-coloured element — stat numerals, footer
      links, kickers — renders black on a black plate, i.e. invisible. */
@@ -721,6 +731,14 @@ html, body { max-width:100%; overflow-x:hidden; }
 }
 @keyframes moDraw{to{stroke-dashoffset:0}}
 
+/* ---------- tap targets --------------------------------------------------
+   Footer links were 14px text with no padding, so their hit boxes came in
+   under the 24x24 WCAG 2.5.8 floor. Give every footer control a 24px minimum
+   without changing how it looks. */
+.lp-root footer button,.lp-root footer a{
+  min-height:24px;display:inline-flex;align-items:center;
+}
+
 /* ---------- brand plate polarity ----------------------------------------
    A brand-filled surface (.bg-violet-*, .bg-zinc-800) is an ink plate too:
    --brand fills it, --brand-fg-on writes on it. But it never re-pointed the
@@ -728,15 +746,38 @@ html, body { max-width:100%; overflow-x:hidden; }
    and rendered near-black on a near-black plate (~1.6:1). Same class of bug as
    the inverted-plate --brand omission. Re-point the ramp with the plate. */
 .lp-root .bg-violet-500,.lp-root .bg-violet-600,.lp-root .bg-violet-700,.lp-root .bg-zinc-800{
-  --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#787878;
+  --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#8a8a8a;
   --border:#3a3a3a; --border-2:#ffffff;
+  --bg:#0a0a0a; /* the plate's own fill, so nested controls can key off it */
 }
 /* In dark theme the brand plate is white, so the ramp flips back to ink. */
 .lp-root.theme-dark .bg-violet-500,.lp-root.theme-dark .bg-violet-600,
 .lp-root.theme-dark .bg-violet-700,.lp-root.theme-dark .bg-zinc-800{
   --fg:#0a0a0a; --fg-2:#262626; --fg-muted:#595959; --fg-faint:#878787;
   --border:#d4d4d4; --border-2:#0a0a0a;
+  --bg:#ffffff;
 }
+
+/* Buttons sitting ON a brand plate.
+   Btn's variants carry .bg-zinc-800 / .bg-white, both of which remap to
+   var(--brand) — the very colour filling the plate — so the CTA buttons were
+   #0a0a0a on a #0a0a0a plate: correct label, invisible button. Key them to the
+   plate's own ramp instead: primary is a filled pill, secondary an outline. */
+.lp-root [class*="bg-violet-"] button.bg-white{
+  background-color:var(--fg)!important;
+  color:var(--bg)!important;
+  border:1px solid var(--fg)!important;
+}
+.lp-root [class*="bg-violet-"] button:not(.bg-white){
+  background-color:transparent!important;
+  color:var(--fg)!important;
+  border:1px solid var(--fg)!important;
+}
+/* mo-magnet's ink-fill overlay must also flip to the plate's ramp */
+.lp-root [class*="bg-violet-"] button.mo-magnet::after{background:var(--fg)!important}
+.lp-root [class*="bg-violet-"] button.mo-magnet.bg-white::after{background:var(--bg)!important}
+.lp-root [class*="bg-violet-"] button.mo-magnet:hover > span{color:var(--bg)!important}
+.lp-root [class*="bg-violet-"] button.mo-magnet.bg-white:hover > span{color:var(--fg)!important}
 
 /* ---------- generated specimen field (plates sliding past each other) ----- */
 .lp-root .mo-marquee-field{
@@ -769,6 +810,11 @@ html, body { max-width:100%; overflow-x:hidden; }
 /* ---------- respect the user ------------------------------------------- */
 @media (prefers-reduced-motion: reduce){
   .lp-root .mo-marquee-field{transform:none!important}
+  /* Inline style="animation:floatY/floatY2" survived the original guard, which
+     only named classes. The audit caught the hero's floating quote card still
+     looping under reduce. Kill every animation on the marketing surface and
+     re-enable nothing: the named resets below restore final states. */
+  .lp-root [style*="floatY"]{animation:none!important}
   .lp-root .mo-rise,.lp-root .mo-char,.lp-root .mo-rule,
   .lp-root .mo-trace::before,.lp-root .mo-trace::after,
   .lp-root .mo-marquee-track,.lp-root .mo-draw .recharts-area-curve,
@@ -2350,10 +2396,22 @@ function Landing({ go, onAuth }) {
               </MoBtn>
             </div>
             <div className="mt-8 flex items-center gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1080ms both" }}>
-              <div className="flex -space-x-2">
-                {["bg-[#111111]", "bg-[#3f3f46]", "bg-[#71717a]", "bg-[#52525b]"].map((c, i) => (
-                  <span key={i} className={"w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold " + c}>
-                    {["AM", "SK", "RB", "JT"][i]}
+              {/* The overlap idiom relied on rounded-full + a white ring to
+                  separate the discs. The monochrome layer strips radius, so the
+                  stack collapsed into one muddy block with the first initials
+                  clipped. Squared plates in a row read correctly instead. */}
+              <div className="flex gap-1" aria-hidden="true">
+                {["AM", "SK", "RB", "JT"].map((initials, i) => (
+                  <span
+                    key={initials}
+                    className="w-8 h-8 flex items-center justify-center text-[10px] font-bold mono"
+                    style={{
+                      border: "1px solid var(--fg)",
+                      background: i % 2 === 0 ? "var(--fg)" : "var(--bg)",
+                      color: i % 2 === 0 ? "var(--bg)" : "var(--fg)",
+                    }}
+                  >
+                    {initials}
                   </span>
                 ))}
               </div>
@@ -2575,7 +2633,21 @@ function Carousel() {
         <button onClick={() => setI((i - 1 + CAROUSEL.length) % CAROUSEL.length)} className="w-9 h-9 rounded-full bg-white border border-gray-300 flex items-center justify-center hover:border-violet-400 hover:text-violet-600 transition" aria-label="Previous"><ChevronLeft size={17} /></button>
         <div className="flex gap-2">
           {CAROUSEL.map((_, d) => (
-            <button key={d} onClick={() => setI(d)} className={"h-2 rounded-full transition-all duration-300 " + (d === i ? "w-7 bg-violet-600" : "w-2 bg-gray-300 hover:bg-gray-400")} aria-label={"Slide " + (d + 1)} />
+            // The visible pill stays 8px, but the hit area is padded out to the
+            // 24px WCAG 2.5.8 floor via a transparent box around it.
+            <button
+              key={d}
+              onClick={() => setI(d)}
+              aria-label={"Slide " + (d + 1)}
+              aria-current={d === i ? "true" : undefined}
+              className="grid place-items-center bg-transparent"
+              style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+            >
+              <span
+                aria-hidden="true"
+                className={"block h-2 rounded-full transition-all duration-300 " + (d === i ? "w-7 bg-violet-600" : "w-2 bg-gray-300 hover:bg-gray-400")}
+              />
+            </button>
           ))}
         </div>
         <button onClick={() => setI((i + 1) % CAROUSEL.length)} className="w-9 h-9 rounded-full bg-white border border-gray-300 flex items-center justify-center hover:border-violet-400 hover:text-violet-600 transition" aria-label="Next"><ChevronRight size={17} /></button>
@@ -8061,6 +8133,27 @@ export default function App() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [route, active]);
 
+  // Decorative icons: hide them from assistive tech.
+  //
+  // Every icon here is a lucide <svg> sitting beside its own text label, so a
+  // screen reader that announces it just says "graphic" and repeats what the
+  // label already said. The audit found 75 such svgs. They come from a single
+  // destructured `lucide-react` import used in 75 places, and ESM can't
+  // re-export a Proxy under named bindings, so a wrapper module would mean
+  // rewriting every call site. This sweep marks any svg that has no accessible
+  // name of its own and is therefore decorative by definition. An icon that
+  // SHOULD be announced can opt out by carrying its own aria-label or <title>.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      document.querySelectorAll("svg:not([aria-hidden]):not([aria-label])").forEach((s) => {
+        if (s.querySelector("title")) return; // labelled on purpose
+        s.setAttribute("aria-hidden", "true");
+        s.setAttribute("focusable", "false");
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [route, active, needsOnboarding]);
+
   // Global Cmd/Ctrl+K to open command palette
   useEffect(() => {
     const onKey = (e) => {
@@ -8186,7 +8279,8 @@ export default function App() {
     content = (
       <div className="min-h-screen bg-white flex flex-col">
         <PublicNav route={route} go={setRoute} onAuth={onAuth} />
-        <div className="flex-1">{page}</div>
+        {/* the marketing surface had no <main>: no skip target, no landmark */}
+        <main id="main" className="flex-1">{page}</main>
         <FooterBig go={setRoute} onAuth={onAuth} />
       </div>
     );
