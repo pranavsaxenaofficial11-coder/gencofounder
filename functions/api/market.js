@@ -44,8 +44,14 @@ export async function onRequestGet(context) {
         { symbol: "ETH", price: d.ethereum?.usd, change24h: d.ethereum?.usd_24h_change },
         { symbol: "SOL", price: d.solana?.usd, change24h: d.solana?.usd_24h_change },
       ].filter((c) => c.price != null);
+    } else {
+      // Usually 429: the keyless tier rate-limits hard. Without this line the
+      // response is just `crypto: null` and the cause is invisible.
+      console.error("[market] CoinGecko HTTP " + r.status + (env.COINGECKO_KEY ? " (with key)" : " (keyless)"));
     }
-  } catch {}
+  } catch (e) {
+    console.error("[market] CoinGecko failed:", e?.message || e);
+  }
 
   // --- Stocks (optional: FMP_KEY from financialmodelingprep.com, or FINNHUB_KEY) ---
   const symbolList = symbols.length ? symbols : ["AAPL", "MSFT", "NVDA"];
@@ -54,14 +60,24 @@ export async function onRequestGet(context) {
 
   if (fmp) {
     try {
-      const r = await fetch(`https://financialmodelingprep.com/api/v3/quote/${symbolList.join(",")}?apikey=${fmp}`);
-      if (r.ok) {
+      // One request per symbol, deliberately. FMP retired /api/v3/quote on
+      // 2025-08-31 (it now returns a "Legacy Endpoint" error), and on the
+      // replacement /stable/quote a comma-separated symbol list is a premium
+      // feature that 402s on the free tier. Note the field rename too:
+      // /stable returns changePercentage, legacy returned changesPercentage.
+      const quotes = await Promise.all(symbolList.map(async (sym) => {
+        const r = await fetch(`https://financialmodelingprep.com/stable/quote?symbol=${encodeURIComponent(sym)}&apikey=${fmp}`);
+        if (!r.ok) return null;
         const arr = await r.json();
-        if (Array.isArray(arr) && arr.length) {
-          out.stocks = arr.map((q) => ({ symbol: q.symbol, price: q.price, changePct: q.changesPercentage }));
-        }
-      }
-    } catch {}
+        const q = Array.isArray(arr) ? arr[0] : null;
+        if (!q || q.price == null) return null;
+        return { symbol: q.symbol || sym, price: q.price, changePct: q.changePercentage };
+      }));
+      const rows = quotes.filter(Boolean);
+      if (rows.length) out.stocks = rows;
+    } catch (e) {
+      console.error("[market] FMP quotes failed:", e?.message || e);
+    }
   }
 
   if (!out.stocks && finnhub && symbols.length) {
