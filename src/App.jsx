@@ -1442,7 +1442,7 @@ function ChatWidget({ module, embedded = false, quickPrompts = [], companyLine, 
       setMsgs((m) => [...m, { role: "assistant", text: reply }]);
     } catch (e) {
       const detail = e?.message ? " (" + e.message + ")" : "";
-      setMsgs((m) => [...m, { role: "assistant", text: "I couldn't reach the live AI just now" + detail + ". Your data is safe - try again in a moment. In puter mode, sign in when the Puter window opens. In nvidia mode, check that NVIDIA_API_KEY is set in Cloudflare Pages, Settings, Variables and redeploy." }]);
+      setMsgs((m) => [...m, { role: "assistant", text: "I couldn't reach the live AI just now" + detail + ". Your data is safe - try again in a moment. In puter mode, sign in when the Puter window opens. In nvidia mode, check that NVIDIA_API_KEY is set in your Worker's Settings, Variables and redeploy." }]);
     }
     setBusy(false);
   }

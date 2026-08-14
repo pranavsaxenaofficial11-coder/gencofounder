@@ -6,7 +6,7 @@ export async function onRequestGet(context) {
     provider: nvidiaKey ? "nvidia-nim" : "puter",
     hasKey: !!nvidiaKey,
     hasRecaptcha: !!env.RECAPTCHA_SECRET_KEY,
-    runtime: "cloudflare-pages-functions",
+    runtime: "cloudflare-workers",
     timestamp: new Date().toISOString(),
   });
 }

@@ -27,7 +27,7 @@ echo.
 
 :: Login check + deploy
 echo  Deploying to Cloudflare...
-call npx wrangler pages deploy
+call npx wrangler deploy
 echo.
 echo  ========================================
 echo   DONE! Your site should be live.

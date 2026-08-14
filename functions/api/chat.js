@@ -26,7 +26,7 @@ export async function onRequestPost(context) {
   const genericKey = env.OPENROUTER_API_KEY || env.AI_API_KEY || env.ANTHROPIC_API_KEY || "";
   if (!nvidiaKey && !genericKey) {
     return Response.json(
-      { error: "No AI key configured. Set NVIDIA_API_KEY (or AI_API_KEY) in Cloudflare Pages environment variables, or in app/.dev.vars for local wrangler dev." },
+      { error: "No AI key configured. Set NVIDIA_API_KEY (or AI_API_KEY) in the Worker's environment variables (Cloudflare dashboard > your Worker > Settings > Variables), or in .dev.vars for local wrangler dev." },
       { status: 500, headers: corsHeaders }
     );
   }

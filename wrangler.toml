@@ -1,3 +1,13 @@
-name = "gencopilot"
-compatibility_date = "2024-06-01"
-pages_build_output_dir = "dist"
+# Workers config. Name matches the Cloudflare Workers Builds project.
+#
+# Deliberately NO not_found_handling here: the default ("none") lets requests
+# that match no asset fall through to the Worker, which is what keeps /api/*
+# reachable. Setting it to "single-page-application" would serve index.html for
+# those and swallow the API routes. The SPA fallback lives in worker.js instead.
+name = "gencofounder"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
