@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail, EmailAuthProvider, linkWithCredential, linkWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs, addDoc, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 
@@ -23,6 +24,56 @@ const firebaseConfig = {
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = initializeApp(firebaseConfig);
+
+// ============================================================================
+// App Check
+// ============================================================================
+// With enforcement ON for Authentication (Firebase Console > Build > App Check
+// > APIs), every auth call — including the automatic anonymous guest session —
+// fails with auth/firebase-app-check-token-is-invalid unless the app attaches a
+// valid App Check token. That is what this block does.
+//
+// Setup, once, in the Firebase Console:
+//   1. Build > App Check > Apps > register this web app with reCAPTCHA v3.
+//      You can reuse the site key already used for the contact form, or mint a
+//      new v3 key pair at https://www.google.com/recaptcha/admin.
+//   2. Put that SITE key in VITE_APPCHECK_SITE_KEY (safe to commit — a
+//      reCAPTCHA site key is public by design; the SECRET half is not).
+//   3. For localhost, see the debug-token note below.
+//
+// Deliberately fail-soft: if the key is unset we skip App Check rather than
+// throw, so a missing variable degrades to "auth blocked by enforcement" with
+// an explanation in the console, instead of a blank page from a module-scope
+// crash.
+const APPCHECK_SITE_KEY = import.meta.env.VITE_APPCHECK_SITE_KEY;
+
+// MUST be assigned before initializeAppCheck() runs, or it is ignored.
+// `true` mints a fresh debug token on every reload, and each one has to be
+// pasted into App Check > Apps > Manage debug tokens — so once you have one
+// registered, put it in VITE_APPCHECK_DEBUG_TOKEN to stop the churn.
+if (import.meta.env.DEV && typeof self !== "undefined") {
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN =
+    import.meta.env.VITE_APPCHECK_DEBUG_TOKEN || true;
+}
+
+export let appCheck = null;
+if (APPCHECK_SITE_KEY) {
+  try {
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(APPCHECK_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (e) {
+    console.error("[app-check] initialization failed:", e?.message || e);
+  }
+} else {
+  console.warn(
+    "[app-check] VITE_APPCHECK_SITE_KEY is not set, so App Check is off. " +
+    "If enforcement is ON in the Firebase Console, every sign-in (and the " +
+    "guest session) will fail with auth/firebase-app-check-token-is-invalid."
+  );
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
