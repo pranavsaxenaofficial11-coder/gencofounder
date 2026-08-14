@@ -2792,7 +2792,7 @@ function Contact() {
 }
 
 // ------------------------------------------------------------ public: auth -
-function AuthPage({ mode, setMode, onLogin, goHome }) {
+function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -2963,7 +2963,11 @@ function AuthPage({ mode, setMode, onLogin, goHome }) {
 
               <Btn variant="ghost" className="w-full py-3" onClick={google}><GoogleG /> Continue with Google</Btn>
 
-              <p className="text-center text-xs text-slate-400 pt-1">Demo mode — any email &amp; password work. Pick <span className="font-bold text-slate-600">Team Member</span> at signup to preview role-based access.</p>
+              {onGuest && (
+                <button onClick={onGuest} className="w-full text-center text-xs font-bold text-slate-400 hover:text-violet-700 transition pt-1">
+                  Continue as guest instead →
+                </button>
+              )}
             </div>
           )}
         </Card>
@@ -8166,12 +8170,15 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Auth gate removed: Sign up / Log in buttons start an instant guest
-  // session (anonymous Firebase auth keeps a real uid so saving works).
-  // Entering the app is now explicit. Anonymous auth is attempted so work
-  // persists, but the dashboard opens either way — a Firebase misconfiguration
-  // costs persistence, never access.
-  const onAuth = async () => {
+  // Sign up / Log in buttons open the real AuthPage in the requested mode.
+  const onAuth = (mode = "login") => {
+    setAuthMode(mode);
+    setRoute("auth");
+  };
+  // Guest entry (from AuthPage's "Continue as guest" link): anonymous
+  // Firebase auth keeps a real uid so saving works, but the dashboard opens
+  // either way — a Firebase misconfiguration costs persistence, never access.
+  const onGuest = async () => {
     try {
       const fb = fbRef.current || await import("./firebase.js");
       await fb.loginAnonymously();
@@ -8273,7 +8280,7 @@ export default function App() {
       </div>
     );
   } else if (route === "auth") {
-    content = <AuthPage mode={authMode} setMode={setAuthMode} onLogin={onLogin} goHome={() => setRoute("landing")} />;
+    content = <AuthPage mode={authMode} setMode={setAuthMode} onLogin={onLogin} onGuest={onGuest} goHome={() => setRoute("landing")} />;
   } else {
     const page = route === "about" ? <About onAuth={onAuth} /> : route === "contact" ? <Contact /> : <Landing go={setRoute} onAuth={onAuth} />;
     content = (
