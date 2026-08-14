@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail, EmailAuthProvider, linkWithCredential, linkWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs, addDoc, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 
 // ─── PASTE YOUR FIREBASE CONFIG HERE ────────────────────────────────────
@@ -31,12 +31,32 @@ export const googleProvider = new GoogleAuthProvider();
 // Auth helpers
 // ============================================================================
 
+// A guest session is created automatically on load, so by the time someone
+// signs in for real they're usually already anonymous. Linking (rather than a
+// fresh sign-in) keeps the SAME uid, so everything saved under
+// companies/{uid} while they were a guest carries over. If the credential
+// already belongs to a real account, fall back to a normal sign-in.
+const ALREADY_IN_USE = [
+  "auth/credential-already-in-use",
+  "auth/email-already-in-use",
+  "auth/provider-already-linked",
+];
+
 export async function loginWithGoogle() {
+  const guest = auth.currentUser?.isAnonymous ? auth.currentUser : null;
+  if (guest) {
+    try {
+      const linked = await linkWithPopup(guest, googleProvider);
+      await ensureUserDoc(linked.user);
+      return linked.user;
+    } catch (e) {
+      if (!ALREADY_IN_USE.includes(e?.code)) throw e;
+      // Google account already registered — sign in to it normally below.
+    }
+  }
   const result = await signInWithPopup(auth, googleProvider);
-  const user = result.user;
-  // Create or update user profile in Firestore
-  await ensureUserDoc(user);
-  return user;
+  await ensureUserDoc(result.user);
+  return result.user;
 }
 
 export async function loginAnonymously() {
@@ -47,10 +67,28 @@ export async function loginAnonymously() {
 
 export async function loginWithEmail(email, password) {
   const result = await signInWithEmailAndPassword(auth, email, password);
+  // Stamps lastLogin, and backfills the doc if the account predates it.
+  await ensureUserDoc(result.user);
   return result.user;
 }
 
 export async function signupWithEmail(email, password, displayName, role = "Founder") {
+  const guest = auth.currentUser?.isAnonymous ? auth.currentUser : null;
+  if (guest) {
+    try {
+      const cred = EmailAuthProvider.credential(email, password);
+      const linked = await linkWithCredential(guest, cred);
+      await updateProfile(linked.user, { displayName });
+      await ensureUserDoc(linked.user, role);
+      return linked.user;
+    } catch (e) {
+      // Not "already in use" → a real failure (weak password, bad email).
+      // Surface it rather than retrying and getting a confusing second error.
+      if (!ALREADY_IN_USE.includes(e?.code)) throw e;
+      // Email already registered: let the plain signup below raise
+      // auth/email-already-in-use so the form says "log in instead".
+    }
+  }
   const result = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(result.user, { displayName });
   await ensureUserDoc(result.user, role);

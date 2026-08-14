@@ -1031,7 +1031,7 @@ function Btn({ children, variant = "primary", className = "", ...p }) {
   };
   return (
     <button
-      className={"inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 active:scale-95 " + styles[variant] + " " + className}
+      className={"inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 " + styles[variant] + " " + className}
       {...p}
     >
       {children}
@@ -2809,12 +2809,15 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
     setBusy(true);
     try {
       const fb = await import("./firebase.js");
-      if (mode === "signup") {
-        await fb.signupWithEmail(email, pw, name || email.split("@")[0], role);
-      } else {
-        await fb.loginWithEmail(email, pw);
-      }
-      // onAuthStateChanged in App will handle the rest
+      const u = mode === "signup"
+        ? await fb.signupWithEmail(email, pw, name || email.split("@")[0], role)
+        : await fb.loginWithEmail(email, pw);
+      // App's onAuthChange fills in the profile but deliberately never routes
+      // (a returning session shouldn't yank a visitor off the marketing site),
+      // so entering the dashboard has to be driven from here. Stay `busy` on
+      // the way out: this unmounts, and it blocks a double submit until then.
+      onLogin(u);
+      return;
     } catch (e) {
       const msg = e?.code === "auth/user-not-found" ? "No account with that email. Sign up instead?"
         : e?.code === "auth/wrong-password" ? "Wrong password. Try again or reset it."
@@ -2830,8 +2833,9 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
     setErr("");
     try {
       const fb = await import("./firebase.js");
-      await fb.loginWithGoogle();
-      // onAuthStateChanged in App handles the rest
+      const u = await fb.loginWithGoogle();
+      onLogin(u); // see doLogin: routing is this page's job, not onAuthChange's
+      return;
     } catch (e) {
       const msg = e?.code === "auth/unauthorized-domain"
         ? "This domain isn't authorized in Firebase. Add it under Authentication → Settings → Authorized domains."
@@ -2957,11 +2961,14 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
 
               {err && <div className="text-sm font-semibold text-red-600 flex items-center gap-1.5"><AlertTriangle size={14} /> {err}</div>}
 
-              <Btn className="w-full py-3" onClick={doLogin}>{mode === "login" ? "Log in" : "Create free account"} <ArrowRight size={15} /></Btn>
+              <Btn className="w-full py-3" onClick={doLogin} disabled={busy}>
+                {busy ? "Just a moment…" : (mode === "login" ? "Log in" : "Create free account")}
+                {!busy && <ArrowRight size={15} />}
+              </Btn>
 
               <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold"><span className="h-px bg-gray-200 flex-1" />or<span className="h-px bg-gray-200 flex-1" /></div>
 
-              <Btn variant="ghost" className="w-full py-3" onClick={google}><GoogleG /> Continue with Google</Btn>
+              <Btn variant="ghost" className="w-full py-3" onClick={google} disabled={busy}><GoogleG /> Continue with Google</Btn>
 
               {onGuest && (
                 <button onClick={onGuest} className="w-full text-center text-xs font-bold text-slate-400 hover:text-violet-700 transition pt-1">
