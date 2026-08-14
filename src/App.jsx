@@ -492,6 +492,11 @@ html, body { max-width:100%; overflow-x:hidden; }
   --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#787878;
   --border:#262626; --border-2:#ffffff; --grid:#1f1f1f;
   --brand-soft-bg:#171717; --brand-soft-2-bg:#1f1f1f;
+  /* --brand MUST invert with the plate. Without this it stays light-theme
+     ink (#0a0a0a) and every brand-coloured element — stat numerals, footer
+     links, kickers — renders black on a black plate, i.e. invisible. */
+  --brand:#ffffff; --brand-hover:#d4d4d4; --brand-2:#a3a3a3; --brand-2-hover:#c4c4c4;
+  --brand-fg-on:#0a0a0a;
   background-color:#0a0a0a!important;color:#ffffff;
 }
 .lp-root.theme-dark .bg-slate-900,.lp-root.theme-dark .bg-slate-800,
@@ -2289,7 +2294,7 @@ function Landing({ go, onAuth }) {
                     <div className="text-sm font-extrabold text-white leading-snug mt-1">{m.name}</div>
                   </div>
                 </div>
-                <button onClick={() => onAuth("signup")} className="flip-back bg-zinc-900 text-left p-4 flex flex-col justify-between cursor-pointer w-full">
+                <button onClick={() => onAuth("signup")} className="flip-face flip-back bg-zinc-900 text-left p-4 flex flex-col justify-between cursor-pointer w-full">
                   <p className="text-xs text-zinc-300 leading-relaxed">{m.blurb}</p>
                   <span className="text-xs font-bold text-fuchsia-400 inline-flex items-center gap-1">Explore <ArrowRight size={12} /></span>
                 </button>
@@ -7748,9 +7753,11 @@ function DetailDrawer({ payload, onClose }) {
 // App
 // ============================================================================
 export default function App() {
-  // Auth removed: boot straight into the dashboard with a local guest user.
-  // Anonymous Firebase auth upgrades it in the background so saving works.
-  const [route, setRoute] = useState("app");
+  // Boot on the marketing site. A guest user is still prepared in the
+  // background (anonymous Firebase auth) so entering the dashboard is instant,
+  // but the boot path no longer force-routes there — only an explicit user
+  // action (Sign Up / Log In / Open dashboard) enters the app.
+  const [route, setRoute] = useState("landing");
   const [authMode, setAuthMode] = useState("login");
   const [user, setUser] = useState(DEV_AUTOLOGIN ? DEV_USER : { name: "Founder", email: null, role: "Founder" });
   const [active, setActive] = useState("overview");
@@ -7779,7 +7786,6 @@ export default function App() {
       try {
         const fb = await import("./firebase.js");
         fbRef.current = fb;
-        setFirebaseReady(true);
         unsub = fb.onAuthChange(async (fbUser) => {
           if (fbUser) {
             let prof = null;
@@ -7791,7 +7797,8 @@ export default function App() {
               role: "Founder",
             };
             setUser(u);
-            setRoute("app");
+            // No setRoute here: a returning session should not yank a visitor
+            // off the marketing site. Entering the app is an explicit action.
             try {
               const saved = await fb.getCompanyData(fbUser.uid);
               if (saved && saved.onboarded) {
@@ -7807,18 +7814,19 @@ export default function App() {
             // No user → start a guest session automatically and go straight
             // to the dashboard. onAuthChange re-fires with the guest user.
             try { await fb.loginAnonymously(); return; }
-            catch (e) { console.error("guest login failed:", e); }
-            // Even if guest login fails, stay on the dashboard with a local
-            // user — the landing/auth pages are never shown.
+            catch (e) { console.warn("guest session unavailable:", e?.message || e); }
+            // Guest auth unavailable (anonymous sign-in disabled, or offline).
+            // Keep a local user so the dashboard is still fully usable; only
+            // persistence is lost. Stay on the marketing site until asked.
             setUser({ name: "Founder", email: null, role: "Founder" });
-            setRoute("app");
           }
           setAuthLoading(false);
         });
       } catch (err) {
         console.error("Firebase failed to initialize:", err);
+        // Offline / misconfigured: the whole app still runs on a local user,
+        // just without persistence. Marketing site stays put.
         setUser({ name: "Founder", email: null, role: "Founder" });
-        setRoute("app");
         setAuthLoading(false);
       }
     })();
@@ -7876,13 +7884,23 @@ export default function App() {
 
   // Auth gate removed: Sign up / Log in buttons start an instant guest
   // session (anonymous Firebase auth keeps a real uid so saving works).
+  // Entering the app is now explicit. Anonymous auth is attempted so work
+  // persists, but the dashboard opens either way — a Firebase misconfiguration
+  // costs persistence, never access.
   const onAuth = async () => {
     try {
       const fb = fbRef.current || await import("./firebase.js");
-      await fb.loginAnonymously(); // onAuthChange routes into the app
+      await fb.loginAnonymously();
     } catch (e) {
-      alert("Couldn't start your session: " + (e?.message || e) + ". Enable Anonymous sign-in in Firebase Console → Authentication → Sign-in method.");
+      console.warn(
+        "Anonymous sign-in unavailable, continuing without persistence:",
+        e?.message || e,
+        "\nEnable it at Firebase Console -> Authentication -> Sign-in method."
+      );
+      setUser((u) => u || { name: "Founder", email: null, role: "Founder" });
     }
+    setActive("overview");
+    setRoute("app");
   };
   const onLogin = async (u) => {
     // u comes from AuthPage — could be mock or real Firebase result
