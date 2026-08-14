@@ -11,6 +11,10 @@
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from "react";
+import {
+  SpecimenPlate, OpposingMarquee, HalftoneField,
+  ScrubWipe, PinnedSteps, ScrubCounter, useScrollTriggerRefresh,
+} from "./graphics.jsx";
 
 // ---------------------------------------------------------------------------
 // reCAPTCHA v3 config
@@ -717,8 +721,54 @@ html, body { max-width:100%; overflow-x:hidden; }
 }
 @keyframes moDraw{to{stroke-dashoffset:0}}
 
+/* ---------- brand plate polarity ----------------------------------------
+   A brand-filled surface (.bg-violet-*, .bg-zinc-800) is an ink plate too:
+   --brand fills it, --brand-fg-on writes on it. But it never re-pointed the
+   text ramp, so a descendant .text-white/85 still resolved to --fg-2 (#262626)
+   and rendered near-black on a near-black plate (~1.6:1). Same class of bug as
+   the inverted-plate --brand omission. Re-point the ramp with the plate. */
+.lp-root .bg-violet-500,.lp-root .bg-violet-600,.lp-root .bg-violet-700,.lp-root .bg-zinc-800{
+  --fg:#ffffff; --fg-2:#e5e5e5; --fg-muted:#a3a3a3; --fg-faint:#787878;
+  --border:#3a3a3a; --border-2:#ffffff;
+}
+/* In dark theme the brand plate is white, so the ramp flips back to ink. */
+.lp-root.theme-dark .bg-violet-500,.lp-root.theme-dark .bg-violet-600,
+.lp-root.theme-dark .bg-violet-700,.lp-root.theme-dark .bg-zinc-800{
+  --fg:#0a0a0a; --fg-2:#262626; --fg-muted:#595959; --fg-faint:#878787;
+  --border:#d4d4d4; --border-2:#0a0a0a;
+}
+
+/* ---------- generated specimen field (plates sliding past each other) ----- */
+.lp-root .mo-marquee-field{
+  display:flex;flex-direction:column;gap:18px;
+  overflow:hidden;pointer-events:none;
+  will-change:transform;
+}
+.lp-root .mo-mq-row{overflow:hidden;display:flex}
+.lp-root .mo-mq-track{
+  display:flex;flex:0 0 auto;gap:18px;align-items:center;
+  will-change:transform;
+}
+.lp-root .mo-mq-tile{
+  flex:0 0 auto;width:132px;height:132px;
+  border:1px solid var(--border-2);
+  padding:14px;
+  color:var(--fg);
+  opacity:.82;
+  background:var(--surface);
+  overflow:hidden; /* the hatch/warp variants draw past the viewBox on purpose */
+}
+.lp-root .mo-mq-row:nth-child(even) .mo-mq-tile{opacity:.55;border-color:var(--border)}
+@media (max-width:640px){
+  .lp-root .mo-mq-tile{width:92px;height:92px;padding:10px}
+}
+
+/* halftone canvas inherits ink so it flips with the plate */
+.lp-root .mo-halftone{color:var(--fg);opacity:.55}
+
 /* ---------- respect the user ------------------------------------------- */
 @media (prefers-reduced-motion: reduce){
+  .lp-root .mo-marquee-field{transform:none!important}
   .lp-root .mo-rise,.lp-root .mo-char,.lp-root .mo-rule,
   .lp-root .mo-trace::before,.lp-root .mo-trace::after,
   .lp-root .mo-marquee-track,.lp-root .mo-draw .recharts-area-curve,
@@ -2090,23 +2140,80 @@ function PublicNav({ route, go, onAuth }) {
   );
 }
 
+// Social handles are not hard-coded on purpose: inventing URLs for a real
+// company is worse than showing nothing. Fill these in and the row appears;
+// leave one empty and that icon is omitted rather than rendered dead.
+const SOCIAL_LINKS = [
+  { Icon: Twitter, label: "GenCopilot on X", url: "" },
+  { Icon: Linkedin, label: "GenCopilot on LinkedIn", url: "" },
+  { Icon: Github, label: "GenCopilot on GitHub", url: "" },
+];
+
+// Plain-language summary of what the app actually does with data, derived from
+// the code (anonymous Firebase auth, per-uid Firestore documents).
+// DRAFT: have counsel review and replace before launch.
+const LEGAL = {
+  Privacy: {
+    title: "Privacy",
+    body: [
+      "DRAFT — this summary describes how the product currently behaves. Have counsel review it before launch.",
+      "Your workspace is stored in Firestore under a document keyed to your own account id. Security rules restrict read and write access to that id, so no other signed-in user can reach your company data.",
+      "Signing in anonymously creates an account id with no email attached. If you never enter an email address, we hold no contact details for you.",
+      "Contact-form submissions are write-only from the browser: the client can create a message but cannot read any back.",
+      "We do not sell personal data, and there is no advertising or third-party analytics SDK in the client.",
+    ],
+  },
+  Terms: {
+    title: "Terms",
+    body: [
+      "DRAFT — this summary describes how the product currently behaves. Have counsel review it before launch.",
+      "GenCopilot is provided as-is while in early access, with no uptime guarantee. Do not rely on it as the sole record of anything you cannot afford to lose.",
+      "You keep ownership of everything you enter. You grant us only the access needed to store it and show it back to you.",
+      "Figures the copilot produces — runway, burn, churn, valuation — are estimates generated from the numbers you supply. They are not financial, legal, or tax advice.",
+      "Do not use the service unlawfully or attempt to reach another workspace's data.",
+    ],
+  },
+  Security: {
+    title: "Security",
+    body: [
+      "DRAFT — this summary describes how the product currently behaves. Have counsel review it before launch.",
+      "Authentication and storage are handled by Firebase. Traffic runs over TLS and credentials are never stored in this application's own code.",
+      "Firestore security rules are deny-by-default: a document is reachable only when the requesting account id owns it. Company data lives under companies/{uid} and is owner-only.",
+      "The client holds no service-account keys or admin credentials. Only public Firebase config, which is designed to be shipped to browsers, is present.",
+      "Found a vulnerability? Use the contact form and we will respond before disclosure.",
+    ],
+  },
+};
+
 function FooterBig({ go, onAuth }) {
   const [email, setEmail] = useState("");
   const [ok, setOk] = useState(false);
-  const social = [Twitter, Linkedin, Github];
+  const [emailErr, setEmailErr] = useState("");
+  const [legal, setLegal] = useState(null);
+  const socials = SOCIAL_LINKS.filter((s) => s.url);
   return (
     <footer className="bg-slate-900 text-slate-300 mt-0">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-14 grid gap-10 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo light />
           <p className="mt-4 text-sm text-slate-400 leading-relaxed max-w-xs">Your AI copilot for startup success — ten modules, one login, zero heroic spreadsheets.</p>
-          <div className="flex gap-2.5 mt-5">
-            {social.map((Icon, i) => (
-              <button key={i} className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center hover:bg-violet-600 hover:-translate-y-1 transition-all duration-200" aria-label="Social link">
-                <Icon size={16} />
-              </button>
-            ))}
-          </div>
+          {socials.length > 0 && (
+            <div className="flex gap-2.5 mt-5">
+              {socials.map(({ Icon, label, url }) => (
+                <a
+                  key={label}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  aria-label={label}
+                  title={label}
+                  className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center hover:bg-violet-600 hover:-translate-y-1 transition-all duration-200"
+                >
+                  <Icon size={16} />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <div className="text-sm font-bold text-white mb-4">Product</div>
@@ -2122,7 +2229,7 @@ function FooterBig({ go, onAuth }) {
             <li><button onClick={() => go("about")} className="hover:text-white transition">About us</button></li>
             <li><button onClick={() => go("contact")} className="hover:text-white transition">Contact</button></li>
             <li><button onClick={() => go("about")} className="hover:text-white transition">Careers</button></li>
-            <li><button onClick={() => go("landing")} className="hover:text-white transition">Pricing</button></li>
+            <li><button onClick={() => { go("landing"); setTimeout(() => scrollToId("pricing"), 60); }} className="hover:text-white transition">Pricing</button></li>
           </ul>
         </div>
         <div>
@@ -2134,25 +2241,75 @@ function FooterBig({ go, onAuth }) {
             <div className="flex gap-2">
               <input
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.nextElementSibling?.click(); }}
+                aria-label="Email address"
+                aria-invalid={!!emailErr}
                 placeholder="you@startup.com"
                 className="flex-1 min-w-0 rounded-xl bg-slate-800 border border-slate-700 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
               />
-              <Btn onClick={() => { if (email.includes("@")) { setOk(true); setEmail(""); } }}>Join</Btn>
+              <Btn
+                onClick={() => {
+                  // Was silently inert on invalid input — now it says why.
+                  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+                  if (!valid) { setEmailErr(email.trim() ? "That email doesn't look right." : "Enter your email first."); return; }
+                  setOk(true); setEmail(""); setEmailErr("");
+                }}
+              >
+                Join
+              </Btn>
             </div>
           )}
+          {emailErr && <div className="text-xs mt-2 font-semibold" style={{ color: "var(--danger)" }} role="alert">{emailErr}</div>}
         </div>
       </div>
       <div className="border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <span>© 2026 GenCopilot, Inc. All rights reserved.</span>
           <span className="flex gap-4">
-            <button className="hover:text-white transition">Privacy</button>
-            <button className="hover:text-white transition">Terms</button>
-            <button className="hover:text-white transition">Security</button>
+            {["Privacy", "Terms", "Security"].map((k) => (
+              <button key={k} onClick={() => setLegal(k)} className="hover:text-white transition">{k}</button>
+            ))}
           </span>
         </div>
       </div>
+
+      {legal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,.6)" }}
+          onClick={() => setLegal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={LEGAL[legal].title}
+        >
+          <div
+            className="bg-white max-w-2xl w-full max-h-[80vh] overflow-auto p-8 scroll-thin mo-trace"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-6">
+              <h2 className="text-2xl font-extrabold text-slate-900">{LEGAL[legal].title}</h2>
+              <button
+                onClick={() => setLegal(null)}
+                aria-label="Close"
+                className="text-slate-500 hover:text-slate-900 transition shrink-0"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mo-rule mt-4 mb-5" />
+            {LEGAL[legal].body.map((para, i) => (
+              <p key={i} className={"text-sm leading-relaxed mb-3 " + (i === 0 ? "mono text-slate-500 uppercase text-[11px]" : "text-slate-700")}>
+                {para}
+              </p>
+            ))}
+            <div className="mt-6 flex gap-3">
+              <Btn onClick={() => { setLegal(null); go("contact"); }}>Contact us</Btn>
+              <Btn variant="ghost" onClick={() => setLegal(null)}>Close</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </footer>
   );
 }
@@ -2164,6 +2321,10 @@ function Landing({ go, onAuth }) {
     <div>
       {/* Hero */}
       <section className="relative hero-grad overflow-hidden mo-scan">
+        {/* generated dot field: swells toward the cursor, breathes on its own */}
+        <div className="absolute inset-0 mo-halftone pointer-events-none" aria-hidden="true">
+          <HalftoneField />
+        </div>
         <div className="max-w-7xl mx-auto px-4 md:px-6 pt-16 pb-20 md:pt-24 md:pb-28 grid lg:grid-cols-2 gap-14 items-center relative">
           <div>
             <div className="mono text-[11px] uppercase text-zinc-500 mb-5 flex items-center gap-2">
@@ -2275,6 +2436,16 @@ function Landing({ go, onAuth }) {
         </div>
       </section>
 
+      {/* Specimen field: generated plates sliding past each other, opposite
+          directions, sheared by scroll velocity. */}
+      <section className="relative py-14 border-b border-gray-200 overflow-hidden">
+        <OpposingMarquee rows={3} perRow={9} speed={38} />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-32 z-10"
+             style={{ background: "linear-gradient(90deg, var(--bg), transparent)" }} />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-32 z-10"
+             style={{ background: "linear-gradient(270deg, var(--bg), transparent)" }} />
+      </section>
+
       {/* Flip-card feature grid: the 10 tracks */}
       <section id="features" className="max-w-7xl mx-auto px-4 md:px-6 py-20">
         <SectionHead
@@ -2312,32 +2483,49 @@ function Landing({ go, onAuth }) {
         </div>
       </section>
 
-      {/* Stats band */}
-      <section className="bg-[#060608] py-16">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
+      {/* Stats band — numerals scrubbed by scroll position, halftone behind */}
+      <section className="bg-[#060608] py-20 relative overflow-hidden">
+        <div className="absolute inset-0 mo-halftone pointer-events-none" aria-hidden="true">
+          <HalftoneField gap={26} />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 md:px-6 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center relative">
           {[
-            ["10", "modules, one login"],
-            ["9 tools", "replaced on average"],
-            ["3.4×", "faster weekly reporting"],
-            ["24/7", "AI copilot on your data"],
-          ].map(([n, l]) => (
+            [10, "", 0, "modules, one login"],
+            [9, " tools", 0, "replaced on average"],
+            [3.4, "×", 1, "faster weekly reporting"],
+            [24, "/7", 0, "AI copilot on your data"],
+          ].map(([n, suffix, decimals, l], i) => (
             <div key={l}>
-              <div className="text-4xl font-extrabold text-violet-400">{n}</div>
-              <div className="text-sm text-zinc-500 mt-1 font-medium">{l}</div>
+              <div className="text-4xl font-extrabold text-violet-400 mo-tick">
+                <ScrubCounter to={n} suffix={suffix} decimals={decimals} />
+              </div>
+              <div className="mo-rule mx-auto mt-3 mb-2" style={{ width: 34, animationDelay: i * 90 + "ms" }} />
+              <div className="text-sm text-zinc-500 font-medium">{l}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* CTA band */}
-      <section className="max-w-7xl mx-auto px-4 md:px-6 py-20">
+      {/* CTA band — also the target the footer's Pricing link scrolls to,
+          since early access is free and this band is the pricing statement. */}
+      <section id="pricing" className="max-w-7xl mx-auto px-4 md:px-6 py-20">
         <div className="rounded-3xl bg-violet-600 p-10 md:p-14 text-center text-white relative overflow-hidden">
-          <div className="blob bg-white w-72 h-72 -top-20 -right-16 opacity-20" />
-          <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">Stop guessing. Start piloting.</h3>
-          <p className="mt-3 text-white/85 max-w-xl mx-auto">Free for early-stage teams. Set up in minutes — your dashboard is one signup away.</p>
-          <div className="mt-7 flex justify-center gap-3 flex-wrap">
-            <Btn variant="dark" className="bg-white text-violet-700 hover:bg-violet-50 px-6 py-3 text-base" onClick={() => onAuth("signup")}>Create free account</Btn>
-            <Btn variant="dark" className="bg-black/30 hover:bg-black/45 px-6 py-3 text-base" onClick={() => go("contact")}>Talk to us</Btn>
+          {/* generated dot field on the plate, inherits the inverted ink ramp */}
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{ color: "var(--fg)", opacity: 0.4 }}>
+            <HalftoneField gap={20} dotMax={2.8} />
+          </div>
+          <div className="relative">
+            <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+              <MoLine delay={0}>Stop guessing. Start piloting.</MoLine>
+            </h3>
+            <div className="mo-rule mx-auto mt-5" style={{ width: 120, background: "var(--fg)" }} />
+            <p className="mt-5 text-white/85 max-w-xl mx-auto">
+              Free for early-stage teams. Set up in minutes — your dashboard is one signup away.
+            </p>
+            <div className="mt-7 flex justify-center gap-3 flex-wrap">
+              <MoBtn variant="dark" inverted className="bg-white text-violet-700 hover:bg-violet-50 px-6 py-3 text-base" onClick={() => onAuth("signup")}>Create free account</MoBtn>
+              <MoBtn variant="dark" className="bg-black/30 hover:bg-black/45 px-6 py-3 text-base" onClick={() => go("contact")}>Talk to us</MoBtn>
+            </div>
           </div>
         </div>
       </section>
@@ -2348,11 +2536,14 @@ function Landing({ go, onAuth }) {
 function Carousel() {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
+  // `i` is in the deps on purpose: picking a slide restarts the countdown, so
+  // an explicit choice always gets a full interval to be read. Without it the
+  // pending tick could fire immediately after a click and yank the slide away.
   useEffect(() => {
     if (paused) return;
     const t = setInterval(() => setI((v) => (v + 1) % CAROUSEL.length), 4800);
     return () => clearInterval(t);
-  }, [paused]);
+  }, [paused, i]);
   return (
     <div className="mt-10 relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
       <div className="overflow-hidden rounded-3xl">
