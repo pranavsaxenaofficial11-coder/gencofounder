@@ -578,6 +578,158 @@ html, body { max-width:100%; overflow-x:hidden; }
   color:#111827!important;
   border:1px solid #0a0a0a!important;
 }
+
+/* ==========================================================================
+   MONOCHROME MOTION — motion layer (wins by source order)
+   Obeys the three laws: no radius, no shadow, no glass, no colour.
+   Everything here moves ink; nothing here tints it.
+   ========================================================================== */
+
+/* ---------- masked line rise (headlines, stacked lines) ------------------- */
+.lp-root .mo-mask{overflow:hidden;display:block}
+.lp-root .mo-rise{
+  display:inline-block;
+  transform:translateY(105%) rotate(1.5deg);
+  opacity:0;
+  animation:moRise 1s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes moRise{
+  from{transform:translateY(105%) rotate(1.5deg);opacity:0}
+  to{transform:translateY(0) rotate(0);opacity:1}
+}
+
+/* ---------- letter-by-letter mono eyebrow --------------------------------- */
+.lp-root .mo-char{
+  display:inline-block;
+  opacity:0;
+  animation:moChar .5s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes moChar{
+  from{opacity:0;transform:translateY(-6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ---------- rule that draws itself L to R -------------------------------- */
+.lp-root .mo-rule{
+  height:1px;background:var(--fg);transform:scaleX(0);transform-origin:left center;
+  animation:moRule 1.1s cubic-bezier(.16,1,.3,1) both;
+}
+.lp-root .mo-rule-thick{height:2px}
+@keyframes moRule{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+/* ---------- scanning hairline (editorial sweep, ink only) ----------------- */
+.lp-root .mo-scan{position:relative;overflow:hidden}
+.lp-root .mo-scan::before{
+  content:"";position:absolute;left:0;top:0;width:100%;height:1px;
+  background:var(--fg);opacity:.28;
+  animation:moScan 7s linear infinite;
+}
+@keyframes moScan{
+  0%{transform:translateY(0)}
+  100%{transform:translateY(100vh)}
+}
+
+/* ---------- magnetic CTA: overrides the global button transition kill ----- */
+.lp-root button.mo-magnet{
+  transition:transform .35s cubic-bezier(.16,1,.3,1),
+             background-color .35s ease,
+             color .35s ease!important;
+  will-change:transform;
+  position:relative;overflow:hidden;
+}
+.lp-root button.mo-magnet::after{
+  content:"";position:absolute;inset:0;background:var(--fg);
+  transform:translateY(101%);transition:transform .4s cubic-bezier(.16,1,.3,1);
+  z-index:0;
+}
+.lp-root button.mo-magnet:hover::after{transform:translateY(0)}
+.lp-root button.mo-magnet > span{position:relative;z-index:1;transition:color .3s ease}
+.lp-root button.mo-magnet:hover > span{color:var(--bg)}
+/* inverted variant sits on ink plates and flips the other way */
+.lp-root button.mo-magnet-inv::after{background:var(--bg)}
+.lp-root button.mo-magnet-inv:hover > span{color:var(--fg)}
+
+/* ---------- animated paper grain (the existing overlay, now breathing) ---- */
+.lp-root::after{animation:moGrain 6s steps(6) infinite}
+@keyframes moGrain{
+  0%{transform:translate(0,0)}
+  20%{transform:translate(-2%,1%)}
+  40%{transform:translate(1%,-2%)}
+  60%{transform:translate(-1%,-1%)}
+  80%{transform:translate(2%,1%)}
+  100%{transform:translate(0,0)}
+}
+
+/* ---------- mono marquee ticker ------------------------------------------- */
+.lp-root .mo-marquee{overflow:hidden;position:relative;display:flex}
+.lp-root .mo-marquee-track{
+  display:flex;flex:0 0 auto;gap:2.5rem;padding-right:2.5rem;
+  animation:moMarquee 32s linear infinite;
+  will-change:transform;
+}
+.lp-root .mo-marquee:hover .mo-marquee-track{animation-play-state:paused}
+@keyframes moMarquee{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+
+/* ---------- scroll reveal ------------------------------------------------- */
+.lp-root .mo-reveal{opacity:0;transform:translateY(24px);
+  transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1)}
+.lp-root .mo-reveal.mo-in{opacity:1;transform:translateY(0)}
+
+/* ---------- hairline frame that traces its own border -------------------- */
+.lp-root .mo-trace{position:relative}
+.lp-root .mo-trace::before,.lp-root .mo-trace::after{
+  content:"";position:absolute;background:var(--fg);opacity:.85;
+}
+.lp-root .mo-trace::before{
+  top:0;left:0;height:1px;width:100%;transform:scaleX(0);transform-origin:left;
+  animation:moRule .9s cubic-bezier(.16,1,.3,1) .15s both;
+}
+.lp-root .mo-trace::after{
+  top:0;left:0;width:1px;height:100%;transform:scaleY(0);transform-origin:top;
+  animation:moTraceY .9s cubic-bezier(.16,1,.3,1) .45s both;
+}
+@keyframes moTraceY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+/* ---------- data tick (counters, mono numerals) -------------------------- */
+.lp-root .mo-tick{font-variant-numeric:tabular-nums;font-family:var(--mono)!important}
+
+/* ---------- parallax layer ----------------------------------------------- */
+.lp-root .mo-parallax{will-change:transform}
+
+/* ---------- caret blink for the live-typing idiom ------------------------ */
+.lp-root .mo-caret::after{
+  content:"";display:inline-block;width:.5em;height:1em;
+  background:currentColor;margin-left:.15em;vertical-align:-.1em;
+  animation:moCaret 1.1s steps(1) infinite;
+}
+@keyframes moCaret{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+
+/* ---------- chart stroke draw-in ---------------------------------------- */
+.lp-root .mo-draw .recharts-area-curve,
+.lp-root .mo-draw .recharts-line-curve{
+  stroke-dasharray:2000;stroke-dashoffset:2000;
+  animation:moDraw 2.4s cubic-bezier(.16,1,.3,1) .3s both;
+}
+@keyframes moDraw{to{stroke-dashoffset:0}}
+
+/* ---------- respect the user ------------------------------------------- */
+@media (prefers-reduced-motion: reduce){
+  .lp-root .mo-rise,.lp-root .mo-char,.lp-root .mo-rule,
+  .lp-root .mo-trace::before,.lp-root .mo-trace::after,
+  .lp-root .mo-marquee-track,.lp-root .mo-draw .recharts-area-curve,
+  .lp-root .mo-draw .recharts-line-curve{animation:none!important}
+  .lp-root .mo-scan::before,.lp-root::after{animation:none!important}
+  .lp-root .mo-caret::after{animation:none!important}
+  .lp-root .mo-rise{transform:none!important;opacity:1!important}
+  .lp-root .mo-char{opacity:1!important;transform:none!important}
+  .lp-root .mo-rule{transform:scaleX(1)!important}
+  .lp-root .mo-trace::before{transform:scaleX(1)!important}
+  .lp-root .mo-trace::after{transform:scaleY(1)!important}
+  .lp-root .mo-reveal{opacity:1!important;transform:none!important;transition:none!important}
+  .lp-root button.mo-magnet{transition:none!important}
+  .lp-root .mo-draw .recharts-area-curve,
+  .lp-root .mo-draw .recharts-line-curve{stroke-dashoffset:0!important}
+}
 `;
 
 // ------------------------------------------------------------- mock data ---
@@ -810,6 +962,143 @@ function SectionHead({ kicker, title, desc, center }) {
       {desc && <p className="mt-3 text-zinc-400 leading-relaxed">{desc}</p>}
     </div>
   );
+}
+
+/* ------------------------------------------------- monochrome motion kit ---
+   Ink that moves. Every primitive degrades to a static, legible state under
+   prefers-reduced-motion (handled in the CSS layer). */
+
+// One headline line, masked and rising into place.
+function MoLine({ children, delay = 0, className = "" }) {
+  return (
+    <span className="mo-mask">
+      <span className={"mo-rise " + className} style={{ animationDelay: delay + "ms" }}>
+        {children}
+      </span>
+    </span>
+  );
+}
+
+// Mono eyebrow, one glyph at a time.
+function MoChars({ text, delay = 0, step = 26, className = "" }) {
+  return (
+    <span className={className} aria-label={text}>
+      {text.split("").map((ch, i) => (
+        <span key={i} className="mo-char" style={{ animationDelay: delay + i * step + "ms" }} aria-hidden="true">
+          {ch === " " ? " " : ch}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// Counts up once, when it enters the viewport.
+function MoTick({ to, prefix = "", suffix = "", duration = 1800, className = "" }) {
+  const [n, setN] = useState(0);
+  const ref = useRef(null);
+  const done = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setN(to); return; }
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting || done.current) return;
+      done.current = true;
+      const t0 = performance.now();
+      const step = (t) => {
+        const p = Math.min((t - t0) / duration, 1);
+        setN(Math.round((1 - Math.pow(1 - p, 3)) * to));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }, { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [to, duration]);
+
+  return <span ref={ref} className={"mo-tick " + className}>{prefix}{n.toLocaleString()}{suffix}</span>;
+}
+
+// Reveals children on scroll-in.
+function MoReveal({ children, delay = 0, className = "" }) {
+  const [inView, setInView] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setInView(true); io.disconnect(); }
+    }, { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={"mo-reveal " + (inView ? "mo-in " : "") + className}
+         style={{ transitionDelay: delay + "ms" }}>
+      {children}
+    </div>
+  );
+}
+
+// Pill CTA that leans toward the cursor and fills with ink on hover.
+// The transform lives on a wrapper so Btn stays a plain (non-ref) component.
+function MoBtn({ children, variant = "primary", inverted = false, className = "", ...p }) {
+  const wrap = useRef(null);
+
+  const onMove = (e) => {
+    const el = wrap.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = el.getBoundingClientRect();
+    const dx = (e.clientX - (r.left + r.width / 2)) / r.width;
+    const dy = (e.clientY - (r.top + r.height / 2)) / r.height;
+    el.style.transform = "translate(" + (dx * 8).toFixed(2) + "px," + (dy * 5).toFixed(2) + "px)";
+  };
+  const onLeave = () => { if (wrap.current) wrap.current.style.transform = "translate(0,0)"; };
+
+  return (
+    <span
+      ref={wrap}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      className="inline-block"
+      style={{ transition: "transform .35s cubic-bezier(.16,1,.3,1)", willChange: "transform" }}
+    >
+      <Btn
+        variant={variant}
+        className={"mo-magnet " + (inverted ? "mo-magnet-inv " : "") + className}
+        {...p}
+      >
+        <span className="inline-flex items-center gap-2">{children}</span>
+      </Btn>
+    </span>
+  );
+}
+
+// Drifts an element against the scroll.
+function useParallax(strength = 0.12) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const r = el.getBoundingClientRect();
+        el.style.transform = "translateY(" + (r.top * -strength).toFixed(2) + "px)";
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { window.removeEventListener("scroll", onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [strength]);
+  return ref;
 }
 
 function Stat({ icon: Icon, label, value, delta, tone = "blue", sub }) {
@@ -1865,28 +2154,36 @@ function FooterBig({ go, onAuth }) {
 
 // --------------------------------------------------------- public: landing -
 function Landing({ go, onAuth }) {
+  const previewRef = useParallax(0.05);
   return (
     <div>
       {/* Hero */}
-      <section className="relative hero-grad overflow-hidden">
-        <div className="blob bg-[#8b5cf6] w-96 h-96 -top-24 -left-24" style={{ animation: "floatY 9s ease-in-out infinite" }} />
-        <div className="blob bg-[#d946ef] w-80 h-80 top-40 right-0" style={{ animation: "floatY2 11s ease-in-out infinite" }} />
-        <div className="blob bg-[#06b6d4] w-72 h-72 -bottom-16 left-1/3" style={{ animation: "floatY 12s ease-in-out infinite" }} />
+      <section className="relative hero-grad overflow-hidden mo-scan">
         <div className="max-w-7xl mx-auto px-4 md:px-6 pt-16 pb-20 md:pt-24 md:pb-28 grid lg:grid-cols-2 gap-14 items-center relative">
-          <div className="anim-fadeUp">
-            <Badge tone="emerald" className="mb-5"><Sparkles size={12} /> New · AI-native startup operating system</Badge>
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
-              Your AI Copilot for{" "}
-              <span className="italic">Startup Success</span>
-            </h1>
-            <p className="mt-5 text-lg text-zinc-400 leading-relaxed max-w-xl">
-              Productivity, product–market fit, leads, churn, runway, compliance, and automation — ten intelligent modules that replace the tab chaos with one clear cockpit.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Btn className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>Sign Up Free <ArrowRight size={17} /></Btn>
-              <Btn variant="ghost" className="px-6 py-3 text-base" onClick={() => scrollToId("features")}>Explore Features</Btn>
+          <div>
+            <div className="mono text-[11px] uppercase text-zinc-500 mb-5 flex items-center gap-2">
+              <Sparkles size={12} className="mo-char" style={{ animationDelay: "0ms" }} />
+              <MoChars text="New · AI-native startup operating system" delay={120} step={18} />
             </div>
-            <div className="mt-8 flex items-center gap-3">
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
+              <MoLine delay={260}>Your AI Copilot for</MoLine>
+              <MoLine delay={400} className="italic">Startup Success</MoLine>
+            </h1>
+            <div className="mo-rule mo-rule-thick mt-6 max-w-xl" style={{ animationDelay: "620ms" }} />
+            <p className="mt-5 text-lg text-zinc-400 leading-relaxed max-w-xl">
+              <MoLine delay={720}>Productivity, product–market fit, leads, churn, runway,</MoLine>
+              <MoLine delay={790}>compliance, and automation — ten intelligent modules that</MoLine>
+              <MoLine delay={860}>replace the tab chaos with one clear cockpit.</MoLine>
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 950ms both" }}>
+              <MoBtn inverted className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>
+                Sign Up Free <ArrowRight size={17} />
+              </MoBtn>
+              <MoBtn variant="ghost" className="px-6 py-3 text-base" onClick={() => scrollToId("features")}>
+                Explore Features
+              </MoBtn>
+            </div>
+            <div className="mt-8 flex items-center gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1080ms both" }}>
               <div className="flex -space-x-2">
                 {["bg-[#111111]", "bg-[#3f3f46]", "bg-[#71717a]", "bg-[#52525b]"].map((c, i) => (
                   <span key={i} className={"w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold " + c}>
@@ -1894,13 +2191,15 @@ function Landing({ go, onAuth }) {
                   </span>
                 ))}
               </div>
-              <span className="text-sm text-zinc-400"><span className="font-bold text-zinc-200">2,300+ founders</span> run their startup here</span>
+              <span className="text-sm text-zinc-400">
+                <span className="font-bold text-zinc-200"><MoTick to={2300} suffix="+" /> founders</span> run their startup here
+              </span>
             </div>
           </div>
 
           {/* Floating product preview */}
-          <div className="relative anim-fadeUp" style={{ animationDelay: "150ms" }}>
-            <Card className="p-5 md:rotate-1 shadow-xl" style={{ animation: "floatY 8s ease-in-out infinite" }}>
+          <div className="relative" ref={previewRef}>
+            <Card className="p-5 md:rotate-1 shadow-xl mo-trace mo-draw" style={{ animation: "fadeUp 1s cubic-bezier(.16,1,.3,1) 320ms both" }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
@@ -1952,6 +2251,22 @@ function Landing({ go, onAuth }) {
                 <span className="text-xs font-semibold text-zinc-300">"Cut burn 12% by pausing 2 unused tools" <span className="text-zinc-500">— AI copilot</span></span>              </Card>
             </div>
           </div>
+        </div>
+        {/* mono ticker: the cockpit's vital signs, always moving */}
+        <div className="border-t border-gray-200 py-3 mo-marquee" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1200ms both" }}>
+          {[0, 1].map((dup) => (
+            <div key={dup} className="mo-marquee-track" aria-hidden={dup === 1}>
+              {[
+                "MRR $48.2K +7.4%", "RUNWAY 9.5 MO", "NPS 42 +3", "CHURN 2.1% −0.4",
+                "LEADS 318 THIS WEEK", "BURN $56K/MO", "PMF SCORE 61", "COMPLIANCE 8/9 CLEAR",
+              ].map((t, i) => (
+                <span key={i} className="mono text-[11px] uppercase text-zinc-500 whitespace-nowrap flex items-center gap-2.5">
+                  <span className="w-1 h-1 bg-current inline-block" />
+                  {t}
+                </span>
+              ))}
+            </div>
+          ))}
         </div>
       </section>
 
