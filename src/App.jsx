@@ -849,6 +849,94 @@ html, body { max-width:100%; overflow-x:hidden; }
   .lp-root .mo-draw .recharts-area-curve,
   .lp-root .mo-draw .recharts-line-curve{stroke-dashoffset:0!important}
 }
+
+/* ---------- overlay surfaces ---------------------------------------------
+   The "three laws" above strip glass, radius and shadow from the whole
+   marketing surface. Modals are the deliberate exception: they float ABOVE
+   the page, so they need to read as a separate plane. These rules sit after
+   the laws and match their specificity, so they win for opted-in elements
+   only — the flat editorial treatment everywhere else is untouched. */
+.lp-root .gc-overlay-scrim{
+  background:rgba(9,9,12,.55)!important;
+  backdrop-filter:blur(10px) saturate(1.1);
+  -webkit-backdrop-filter:blur(10px) saturate(1.1);
+  animation:gcScrimIn .28s ease both;
+}
+.lp-root .gc-overlay-panel{
+  background:rgba(255,255,255,.86)!important;
+  backdrop-filter:blur(24px) saturate(1.7)!important;
+  -webkit-backdrop-filter:blur(24px) saturate(1.7)!important;
+  border:1px solid rgba(255,255,255,.5)!important;
+  border-radius:20px!important;
+  box-shadow:0 24px 70px -12px rgba(0,0,0,.45)!important;
+  animation:gcPanelIn .34s cubic-bezier(.16,1,.3,1) both;
+}
+.lp-root.theme-dark .gc-overlay-panel{
+  background:rgba(20,20,26,.82)!important;
+  border:1px solid rgba(255,255,255,.1)!important;
+  box-shadow:0 24px 70px -12px rgba(0,0,0,.75)!important;
+}
+@keyframes gcScrimIn{from{opacity:0}to{opacity:1}}
+@keyframes gcPanelIn{
+  from{opacity:0;transform:translateY(16px) scale(.96)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+/* chat bubbles keep their pill shape inside the panel */
+.lp-root .gc-bubble{border-radius:16px!important}
+.lp-root .gc-bubble-me{border-bottom-right-radius:5px!important}
+.lp-root .gc-bubble-them{border-bottom-left-radius:5px!important}
+.lp-root .gc-msg-in{animation:gcMsgIn .3s cubic-bezier(.16,1,.3,1) both}
+@keyframes gcMsgIn{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+
+/* ---------- toast notifications ------------------------------------------ */
+.lp-root .gc-toast{
+  border-radius:14px!important;
+  box-shadow:0 12px 32px -8px rgba(0,0,0,.4)!important;
+  background:rgba(255,255,255,.9)!important;
+  backdrop-filter:blur(18px) saturate(1.6);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);
+  border:1px solid var(--border)!important;
+  animation:gcToastIn .42s cubic-bezier(.16,1,.3,1) both;
+}
+.lp-root.theme-dark .gc-toast{
+  background:rgba(22,22,28,.88)!important;
+  border:1px solid rgba(255,255,255,.1)!important;
+}
+.lp-root .gc-toast-out{animation:gcToastOut .26s cubic-bezier(.4,0,1,1) both}
+@keyframes gcToastIn{
+  0%{opacity:0;transform:translateX(120%) scale(.9)}
+  60%{opacity:1;transform:translateX(-6px) scale(1.01)}
+  100%{opacity:1;transform:translateX(0) scale(1)}
+}
+@keyframes gcToastOut{
+  from{opacity:1;transform:translateX(0) scale(1)}
+  to{opacity:0;transform:translateX(120%) scale(.92)}
+}
+/* the progress hairline that drains while the toast is up */
+.lp-root .gc-toast-bar{animation:gcToastBar linear both}
+@keyframes gcToastBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+/* icon pops once on arrival */
+.lp-root .gc-toast-icon{animation:gcToastPop .5s cubic-bezier(.16,1,.3,1) .1s both}
+@keyframes gcToastPop{0%{transform:scale(0) rotate(-25deg)}60%{transform:scale(1.18) rotate(6deg)}100%{transform:scale(1) rotate(0)}}
+
+/* ---------- signup buddy -------------------------------------------------- */
+.lp-root .gc-buddy-bubble{
+  border-radius:16px!important;
+  border-bottom-left-radius:5px!important;
+  animation:gcBuddyIn .38s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes gcBuddyIn{from{opacity:0;transform:translateY(10px) scale(.94)}to{opacity:1;transform:none}}
+.lp-root .gc-buddy-orb{animation:gcBuddyFloat 3.6s ease-in-out infinite}
+@keyframes gcBuddyFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.lp-root .gc-buddy-dot{animation:gcBuddyDot 1.3s ease-in-out infinite}
+@keyframes gcBuddyDot{0%,80%,100%{opacity:.25;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
+
+@media (prefers-reduced-motion: reduce){
+  .lp-root .gc-overlay-scrim,.lp-root .gc-overlay-panel,.lp-root .gc-msg-in,
+  .lp-root .gc-toast,.lp-root .gc-toast-out,.lp-root .gc-toast-icon,
+  .lp-root .gc-toast-bar,.lp-root .gc-buddy-bubble,.lp-root .gc-buddy-orb,
+  .lp-root .gc-buddy-dot{animation:none!important}
+}
 `;
 
 // ------------------------------------------------------------- mock data ---
@@ -3013,6 +3101,79 @@ function Contact() {
 // verification link, not by this pattern.
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
+// ---- signup buddy ---------------------------------------------------------
+// A small guide beside the signup form that reacts to what's being typed.
+// Everything is derived locally from the field values — no network call, so it
+// responds instantly and works offline.
+
+// Deterministic pick so a given name always gets the same compliment (it would
+// feel broken if the line reshuffled on every keystroke).
+function hashPick(seed, arr) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return arr[h % arr.length];
+}
+
+const NAME_COMPLIMENTS = [
+  (n) => `${n} — that's a great name.`,
+  (n) => `Nice to meet you, ${n}.`,
+  (n) => `${n}. Strong founder energy already.`,
+  (n) => `Love it, ${n}. Suits a builder.`,
+  (n) => `${n} — that one's got a ring to it.`,
+];
+
+const ROLE_LINES = {
+  Founder: "A founder. That's the hardest job on the org chart — let's make it lighter.",
+  "Team Member": "Team member — the people who actually ship. Welcome aboard.",
+  Admin: "Admin access it is. You'll be the one keeping everyone honest.",
+};
+
+function buddyScript({ mode, name, email, pw, role, err, busy, verifySent }) {
+  if (verifySent) return { text: "Check your inbox and click the link — I'll be right here when you're back.", tone: "cheer" };
+  if (err) return { text: "Hmm, that didn't go through. Have a look at the note above and try again.", tone: "worry" };
+  if (busy) return { text: "Setting things up for you…", tone: "think" };
+  if (mode === "reset") return { text: "Happens to everyone. Pop your email in and I'll send a reset link.", tone: "calm" };
+  if (mode === "login") return { text: "Welcome back. Let's get you into the cockpit.", tone: "calm" };
+
+  const first = name.trim().split(/\s+/)[0];
+  if (!first) return { text: "Hey! I'm Pilot. What should I call you?", tone: "wave" };
+
+  const pretty = first.charAt(0).toUpperCase() + first.slice(1);
+  if (!email.trim()) return { text: hashPick(pretty.toLowerCase(), NAME_COMPLIMENTS)(pretty), tone: "cheer" };
+  if (!EMAIL_RE.test(email.trim())) return { text: `Almost, ${pretty} — that address is missing something.`, tone: "worry" };
+  if (pw.length === 0) return { text: "Email looks good. Now pick a password — six characters minimum.", tone: "calm" };
+  if (pw.length < 6) return { text: `${6 - pw.length} more character${6 - pw.length === 1 ? "" : "s"} and you're there.`, tone: "think" };
+  if (pw.length >= 12) return { text: "That's a seriously solid password. I approve.", tone: "cheer" };
+  if (role) return { text: ROLE_LINES[role] || "Ready when you are.", tone: "calm" };
+  return { text: "All set — hit the button and let's go.", tone: "cheer" };
+}
+
+const BUDDY_FACES = { wave: "◕‿◕", cheer: "◕ᴗ◕", calm: "◕‿◕", think: "◕_◕", worry: "◕︵◕" };
+
+function SignupBuddy({ state }) {
+  const line = buddyScript(state);
+  const reduced = usePrefersReducedMotion();
+  return (
+    <div className="flex items-start gap-3 max-w-sm" aria-live="polite">
+      <span
+        className={"gc-buddy-orb w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-[13px] font-bold text-white select-none " + (reduced ? "" : "")}
+        style={{ background: "linear-gradient(140deg,#7c3aed,#d946ef)", letterSpacing: "-.05em" }}
+        aria-hidden="true"
+      >
+        {BUDDY_FACES[line.tone] || BUDDY_FACES.calm}
+      </span>
+      <div key={line.text} className="gc-buddy-bubble bg-white/10 border border-white/15 px-4 py-3">
+        <div className="text-[13px] leading-relaxed text-slate-100">{line.text}</div>
+        <div className="flex gap-1 mt-1.5" aria-hidden="true">
+          {[0, 1, 2].map((d) => (
+            <span key={d} className="gc-buddy-dot w-1 h-1 rounded-full bg-white/50" style={{ animationDelay: d * 0.16 + "s" }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
   const reducedMotion = usePrefersReducedMotion();
   const [name, setName] = useState("");
@@ -3135,6 +3296,10 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
               <li key={t} className="flex items-center gap-3 text-sm text-slate-300"><span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center"><Check size={13} /></span>{t}</li>
             ))}
           </ul>
+          {/* Pilot reacts to whatever is being typed on the right */}
+          <div className="mt-9">
+            <SignupBuddy state={{ mode, name, email, pw, role, err, busy, verifySent }} />
+          </div>
         </div>
         <Card className="relative bg-white/10 border-white/15 backdrop-blur p-5 max-w-sm" style={{ animation: "floatY 9s ease-in-out infinite" }}>
           <p className="text-sm text-slate-200 leading-relaxed">“We killed nine tools the week we onboarded. Our Monday metrics meeting went from 90 minutes to 15.”</p>
@@ -3523,8 +3688,12 @@ function ModuleShell({ module, children, noChat = false, companyLine }) {
           <BlurText key={module.id} text={module.name} animateBy="words" delay={70} stepDuration={0.25} />
         </h1>
         <p className="text-sm text-zinc-400 mt-1.5 max-w-2xl">{module.blurb}</p>
+        {/* rule draws itself under the title on every module change */}
+        <div key={module.id + "-rule"} className="mo-rule mo-rule-thick mt-4 max-w-xs" />
       </div>
-      {children}
+      <AnimatedContent distance={26} duration={0.5} ease="power3.out" threshold={0.02}>
+        {children}
+      </AnimatedContent>
     </div>
   );
 }
@@ -6356,7 +6525,64 @@ const INTERVIEW_QUESTIONS = [
   { key: "extra", q: "Anything else your AI co-founder should always keep in mind? (Type 'done' if nothing.)" },
 ];
 
+// One place to talk to whichever model is configured. Returns "" on failure so
+// callers can fall back rather than crash.
+async function askAI(system, userText, maxTokens = 300) {
+  try {
+    if (AI_MODE === "puter") {
+      const puter = await loadPuter();
+      const result = await puter.ai.chat(
+        [{ role: "system", content: system }, { role: "user", content: userText }],
+        false,
+        { model: PUTER_MODEL, max_tokens: maxTokens }
+      );
+      const out = typeof result === "string" ? result : (result?.message?.content ?? result?.text ?? "");
+      return String(out).trim();
+    }
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system, messages: [{ role: "user", content: userText }], max_tokens: maxTokens }),
+    });
+    const data = await res.json();
+    return data?.content?.[0]?.text?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+// Stage 1 of the answer gate: an instant, offline check that catches the
+// obvious non-answers ("yoo", "asdf", "ok") with no round-trip.
+const INTERVIEW_FILLER = new Set([
+  "yo","yoo","yooo","hi","hii","hey","hello","ok","okay","k","kk","lol","lmao","haha","hmm","umm","um",
+  "test","testing","asdf","asdfgh","qwerty","abc","xyz","blah","meh","idk","dunno","sure","yes","yeah",
+  "yep","no","nope","nah","cool","nice","good","great","fine","whatever","anything","something","stuff",
+]);
+
+function localAnswerCheck(text) {
+  const t = text.trim();
+  const bare = t.toLowerCase().replace(/[^a-z\s]/g, " ").trim();
+  if (/^(skip|pass|next|move on|n\/?a|none|nothing)$/i.test(t)) return "skip";
+  const words = bare.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "empty";
+  // No sequence of 3+ letters anywhere → keysmash or emoji-only.
+  if (!/[a-z]{3}/.test(bare)) return "gibberish";
+  if (words.every((w) => INTERVIEW_FILLER.has(w))) return "filler";
+  if (words.length < 3) return "tooShort";
+  return "ok";
+}
+
+const PROBE_BY_REASON = {
+  gibberish: "I couldn't make sense of that one — could you write it out in a sentence or two?",
+  filler: "I need a bit more to go on there.",
+  tooShort: "That's a start — can you expand on it a little?",
+  empty: "I didn't catch that.",
+};
+
 function InterviewModule({ module, user, company, setCompany }) {
+  const { notify } = useTheme();
+  const [attempts, setAttempts] = useState(0); // nudges spent on the current question
+  const [thinking, setThinking] = useState(false);
   const [msgs, setMsgs] = useState(() => {
     const first = INTERVIEW_QUESTIONS[0].q;
     return [{ role: "assistant", text: "Hi" + (user?.name ? " " + user.name.split(" ")[0] : "") + " — I'm going to ask you " + INTERVIEW_QUESTIONS.length + " quick questions about " + (company?.name || "your startup") + ". Your answers become my permanent understanding of the company, so every future answer I give is grounded in them.\n\n" + first }];
@@ -6368,25 +6594,93 @@ function InterviewModule({ module, user, company, setCompany }) {
   const [profile, setProfile] = useState(company?.aiProfile || "");
   const boxRef = useRef(null);
 
-  useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, phase]);
+  useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, phase, thinking]);
 
-  async function submit() {
-    const text = input.trim();
-    if (!text || phase !== "asking") return;
-    setInput("");
-    const qk = INTERVIEW_QUESTIONS[step].key;
-    const nextAnswers = { ...answers, [qk]: text };
+  // Move to the next question (or synthesis), optionally prefixed by a short
+  // reaction so it's obvious the answer was actually read.
+  // `userMsg` is null when the caller has already appended it (the AI path
+  // shows the reply before the model is consulted, so the UI isn't frozen).
+  async function advance(nextAnswers, userMsg, lead) {
+    setAttempts(0);
     setAnswers(nextAnswers);
-    const userMsg = { role: "user", text };
+    const tail = (t) => (userMsg ? [userMsg, t] : [t]);
     if (step < INTERVIEW_QUESTIONS.length - 1) {
       const nq = INTERVIEW_QUESTIONS[step + 1].q;
-      setMsgs((m) => [...m, userMsg, { role: "assistant", text: nq }]);
+      setMsgs((m) => [...m, ...tail({ role: "assistant", text: (lead ? lead + "\n\n" : "") + nq })]);
       setStep(step + 1);
     } else {
-      setMsgs((m) => [...m, userMsg, { role: "assistant", text: "Perfect — give me a moment to put this all together…" }]);
+      setMsgs((m) => [...m, ...tail({ role: "assistant", text: (lead ? lead + "\n\n" : "") + "Perfect — give me a moment to put this all together…" })]);
       setPhase("synthesizing");
       await synthesize(nextAnswers);
     }
+  }
+
+  async function submit() {
+    const text = input.trim();
+    if (!text || phase !== "asking" || thinking) return;
+    setInput("");
+    const q = INTERVIEW_QUESTIONS[step];
+    const userMsg = { role: "user", text };
+
+    // ---- stage 1: instant local gate --------------------------------------
+    const local = localAnswerCheck(text);
+
+    if (local === "skip") {
+      await advance({ ...answers, [q.key]: "(skipped)" }, userMsg, "No problem — skipping that one.");
+      return;
+    }
+
+    // Junk answer: push back instead of silently accepting it. After two
+    // nudges take whatever they've given — the point is to interview them,
+    // not to trap them behind a question they don't want to answer.
+    if (local !== "ok" && attempts < 2) {
+      setAttempts((a) => a + 1);
+      const nudge = attempts === 0
+        ? `${PROBE_BY_REASON[local]} ${q.q}`
+        : `Still not quite enough for me to work with, but this is the last time I'll ask. ${q.q}\n\n(Type "skip" if you'd rather move on.)`;
+      setMsgs((m) => [...m, userMsg, { role: "assistant", text: nudge }]);
+      return;
+    }
+
+    if (local !== "ok") {
+      // Two nudges spent — accept it and move on.
+      await advance({ ...answers, [q.key]: text }, userMsg, "Alright, noted — let's keep going.");
+      return;
+    }
+
+    // ---- stage 2: let the model judge a plausible-looking answer ----------
+    setMsgs((m) => [...m, userMsg]);
+    setThinking(true);
+    const verdict = await askAI(
+      "You are interviewing a startup founder. Decide whether their reply actually answers the question asked. " +
+      "Reply with STRICT JSON only, no markdown fence: " +
+      '{"ok": true|false, "reaction": "<=15 word acknowledgement referencing a specific detail they gave", "followUp": "one short question asking for what is missing"}. ' +
+      'Set ok=false ONLY if the reply is off-topic, evasive, or has no usable content. A brief but genuine answer is ok=true. ' +
+      'When ok=true, followUp must be "".',
+      "Question: " + q.q + "\n\nFounder's reply: " + text,
+      200
+    );
+    setThinking(false);
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(verdict.replace(/^```(?:json)?|```$/g, "").trim());
+    } catch { /* model unavailable or wandered off format */ }
+
+    // No usable verdict → trust the local gate and accept. A broken AI must
+    // never block someone from finishing the interview.
+    if (!parsed || typeof parsed.ok !== "boolean") {
+      await advance({ ...answers, [q.key]: text }, null, null);
+      return;
+    }
+
+    if (!parsed.ok && attempts < 2) {
+      setAttempts((a) => a + 1);
+      setMsgs((m) => [...m, { role: "assistant", text: (parsed.followUp || "Could you say a little more about that?") + '\n\n(Type "skip" to move on.)' }]);
+      return;
+    }
+
+    await advance({ ...answers, [q.key]: text }, null, parsed.reaction || null);
   }
 
   async function synthesize(a) {
@@ -6394,30 +6688,7 @@ function InterviewModule({ module, user, company, setCompany }) {
     let summary = "";
     const system = "You are compiling a company knowledge profile from a founder interview. Write a dense, factual 150-220 word profile in third person covering: what the company does and for whom, the problem and current alternatives, competitors and differentiation, business model, customers, team, 90-day goal, and key risks. No preamble, no headings — one tight paragraph. Use only the founder's own words as source; do not invent facts.";
     const userMsg = "Company name: " + (company?.name || "Unknown") + "\n\nInterview transcript:\n\n" + qa;
-    try {
-      if (AI_MODE === "puter") {
-        const puter = await loadPuter();
-        const result = await puter.ai.chat(
-          [{ role: "system", content: system }, { role: "user", content: userMsg }],
-          false,
-          { model: PUTER_MODEL, max_tokens: 500 }
-        );
-        const out = typeof result === "string" ? result : (result?.message?.content ?? result?.text ?? "");
-        summary = String(out).trim();
-      } else {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system,
-            messages: [{ role: "user", content: userMsg }],
-            max_tokens: 500,
-          }),
-        });
-        const data = await res.json();
-        summary = data?.content?.[0]?.text?.trim() || "";
-      }
-    } catch {}
+    summary = await askAI(system, userMsg, 500);
     if (!summary) {
       // fallback: store structured raw answers so the AI still gets everything
       summary = INTERVIEW_QUESTIONS.map((q) => q.key + ": " + (a[q.key] || "-")).join(" | ");
@@ -6428,7 +6699,7 @@ function InterviewModule({ module, user, company, setCompany }) {
       const fb = await import("./firebase.js");
       if (user?.uid) await fb.saveAiProfile(user.uid, { aiProfile: summary, aiInterview: a });
     } catch (e) {
-      alert("Your profile is active for this session, but saving it to the cloud failed: " + (e?.message || e));
+      notify({ tone: "error", title: "Profile saved locally only", body: "It's active for this session, but syncing to the cloud failed: " + (e?.message || e), duration: 7000 });
     }
     if (setCompany) setCompany((prev) => ({ ...prev, aiProfile: summary, aiInterview: a }));
     setMsgs((m) => [...m, { role: "assistant", text: "Done — here's what I now know about " + (company?.name || "your company") + ":\n\n" + summary + "\n\nFrom now on, every answer I give anywhere in GenCopilot is grounded in this. You can redo this interview anytime as things change." }]);
@@ -6463,14 +6734,15 @@ function InterviewModule({ module, user, company, setCompany }) {
                 {m.text}
               </div>
             ))}
+            {thinking && <div className="text-xs text-slate-400 flex items-center gap-2"><Loader2 size={13} className="animate-spin" /> Reading your answer…</div>}
             {phase === "synthesizing" && <div className="text-xs text-slate-400 flex items-center gap-2"><Loader2 size={13} className="animate-spin" /> Building your company profile…</div>}
           </div>
           {/* input */}
           <div className="p-4 border-t border-gray-200 flex gap-2">
             {phase === "asking" ? (
               <>
-                <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={2} placeholder="Type your answer… (Enter to send)" className="flex-1 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm resize-none focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                <Btn variant="primary" className="px-4 self-end" onClick={submit} disabled={!input.trim()}><Send size={15} /></Btn>
+                <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={2} disabled={thinking} placeholder={thinking ? "Reading your answer…" : "Type your answer… (Enter to send)"} className="flex-1 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm resize-none focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 disabled:opacity-60" />
+                <Btn variant="primary" className="px-4 self-end" onClick={submit} disabled={!input.trim() || thinking}><Send size={15} /></Btn>
               </>
             ) : (
               <Btn variant="ghost" className="mx-auto" onClick={restart}>{phase === "done-before" ? "Redo the interview" : "Start over"}</Btn>
@@ -6840,12 +7112,15 @@ function TalentModule({ module, user, company }) {
 }
 
 function DMPanel({ me, them, onClose }) {
+  const { notify } = useTheme();
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState("");
   const [subKey, setSubKey] = useState(0);
   const cidRef = useRef(null);
   const subDeadRef = useRef(false);
   const busyRef = useRef(false);
+  const inputRef = useRef(null);
+  const endRef = useRef(null);
 
   useEffect(() => {
     let unsub;
@@ -6876,36 +7151,73 @@ function DMPanel({ me, them, onClose }) {
       if (subDeadRef.current) setSubKey((k) => k + 1); // conversation now exists — resubscribe
     } catch (e) {
       setText(t); // give the message back so it isn't lost
-      alert("Couldn't send: " + (e?.message || e));
+      notify({ tone: "error", title: "Message not sent", body: e?.message || String(e) });
     }
     busyRef.current = false;
   }
 
+  // Escape closes, and the composer takes focus on open.
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const t = setTimeout(() => inputRef.current?.focus(), 120);
+    return () => { window.removeEventListener("keydown", onKey); clearTimeout(t); };
+  }, [onClose]);
+
+  // Pin to the newest message whenever the thread grows.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [msgs.length]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
-      <Card className="relative w-full sm:max-w-md h-[70vh] sm:h-[520px] flex flex-col rounded-t-3xl sm:rounded-2xl overflow-hidden lp-glass">
-        <div className="flex items-center gap-3 p-4 border-b border-gray-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={"Conversation with " + them.name}>
+      <div className="absolute inset-0 gc-overlay-scrim" onClick={onClose} />
+      <div className="gc-overlay-panel relative w-full max-w-md h-[min(560px,85vh)] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: "var(--border)" }}>
           <Avatar name={them.name} size={38} />
           <div className="min-w-0 flex-1">
             <div className="font-extrabold text-slate-900 truncate">{them.name}</div>
             <div className="text-xs text-slate-400 truncate">{them.headline || them.role || "Founder"}</div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+          <button onClick={onClose} aria-label="Close conversation" className="p-1.5 rounded-lg hover:bg-black/5 transition"><X size={18} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-          {msgs.length === 0 && <div className="text-center text-xs text-slate-400 mt-8">Say hello</div>}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2.5 scroll-thin">
+          {msgs.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-center gap-2 px-6">
+              <span className="w-11 h-11 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center"><MessageCircle size={20} /></span>
+              <div className="text-sm font-bold text-slate-700">Say hello</div>
+              <div className="text-xs text-slate-400">This is the start of your conversation with {them.name.split(" ")[0]}.</div>
+            </div>
+          )}
           {msgs.map((m) => (
-            <div key={m.id} className={"max-w-[80%] rounded-2xl px-3.5 py-2 text-sm " + (m.fromId === me.uid ? "ml-auto bg-violet-600 text-white rounded-br-md" : "bg-gray-100 text-slate-700 rounded-bl-md")}>
+            <div
+              key={m.id}
+              className={
+                "gc-bubble gc-msg-in max-w-[80%] px-3.5 py-2 text-sm " +
+                (m.fromId === me.uid
+                  ? "gc-bubble-me ml-auto bg-violet-600 text-white"
+                  : "gc-bubble-them bg-black/5 text-slate-700")
+              }
+            >
               {m.text}
             </div>
           ))}
+          <div ref={endRef} />
         </div>
-        <div className="p-3 border-t border-gray-200 flex gap-2">
-          <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Type a message…" className="flex-1 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-violet-500 focus:outline-none" />
-          <Btn variant="primary" className="px-3.5" onClick={send} disabled={!text.trim()}><Send size={15} /></Btn>
+        <div className="p-3 border-t flex gap-2" style={{ borderColor: "var(--border)" }}>
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder="Type a message…"
+            aria-label="Message"
+            className="flex-1 rounded-xl border px-3.5 py-2.5 text-sm bg-white/70 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
+            style={{ borderColor: "var(--border)" }}
+          />
+          <Btn variant="primary" className="px-3.5" onClick={send} disabled={!text.trim()} aria-label="Send"><Send size={15} /></Btn>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -7398,26 +7710,37 @@ function OverviewLive({ module, user, company, setActive }) {
     : null;
   const atRisk = (clients || []).filter((c) => Number(c.health) > 0 && Number(c.health) < 60);
 
+  // `to`/`decimals` drive a CountUp roll-in; `value` is the static fallback for
+  // the runway dash when there are no numbers to count to yet.
   const kpis = [
-    { label: "MRR", value: "$" + (company.mrr || 0) + "k", sub: growth != null ? (growth >= 0 ? "+" : "") + growth + "% MoM" : "add monthly updates", icon: TrendingUp },
-    { label: "Customers", value: (company.customers || 0).toLocaleString(), sub: "from Company Data", icon: Users },
-    { label: "Monthly churn", value: (company.churn || 0) + "%", sub: company.churn > 5 ? "above healthy range" : "looks healthy", icon: TrendingDown },
-    { label: "Runway", value: runway ? runway.toFixed(1) + " mo" : "—", sub: runway ? "$" + company.cash + "k ÷ $" + company.netBurn + "k/mo" : "enter burn + cash", icon: Wallet },
+    { label: "MRR", to: company.mrr || 0, prefix: "$", suffix: "k", sub: growth != null ? (growth >= 0 ? "+" : "") + growth + "% MoM" : "add monthly updates", icon: TrendingUp },
+    { label: "Customers", to: company.customers || 0, separator: ",", sub: "from Company Data", icon: Users },
+    { label: "Monthly churn", to: company.churn || 0, suffix: "%", sub: company.churn > 5 ? "above healthy range" : "looks healthy", icon: TrendingDown },
+    { label: "Runway", to: runway ? Number(runway.toFixed(1)) : 0, suffix: " mo", value: runway ? null : "—", sub: runway ? "$" + company.cash + "k ÷ $" + company.netBurn + "k/mo" : "enter burn + cash", icon: Wallet },
   ];
 
   return (
     <ModuleShell module={module} companyLine={companyLineFrom(company)}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        {kpis.map((k) => (
-          <SpotlightCard
-            key={k.label}
-            className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4"
-            spotlightColor="rgba(124, 58, 237, 0.14)"
-          >
-            <div className="flex items-center gap-2 text-slate-400"><k.icon size={15} /><span className="text-[11px] font-extrabold uppercase tracking-wider">{k.label}</span></div>
-            <div className="text-2xl font-extrabold text-slate-900 mt-1.5">{k.value}</div>
-            <div className="text-xs text-slate-400 mt-0.5">{k.sub}</div>
-          </SpotlightCard>
+        {kpis.map((k, i) => (
+          <AnimatedContent key={k.label} distance={30} duration={0.5} ease="power3.out" threshold={0.05} delay={i * 0.07}>
+            <SpotlightCard
+              className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 h-full"
+              spotlightColor="rgba(124, 58, 237, 0.14)"
+            >
+              <div className="flex items-center gap-2 text-slate-400"><k.icon size={15} /><span className="text-[11px] font-extrabold uppercase tracking-wider">{k.label}</span></div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1.5">
+                {k.value != null ? k.value : (
+                  <>
+                    {k.prefix}
+                    <CountUp to={k.to} duration={1.5} separator={k.separator || ""} />
+                    {k.suffix}
+                  </>
+                )}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">{k.sub}</div>
+            </SpotlightCard>
+          </AnimatedContent>
         ))}
       </div>
 
@@ -7993,8 +8316,76 @@ const ThemeContext = React.createContext({
   theme: "light",
   setTheme: () => {},
   openDetail: () => {},
+  notify: () => {},
 });
 const useTheme = () => React.useContext(ThemeContext);
+
+// ============================================================================
+// Toasts — animated, self-dismissing notifications
+// ============================================================================
+const TOAST_TONES = {
+  success: { Icon: CheckCircle2, ring: "bg-emerald-500/12 text-emerald-500", bar: "#10b981" },
+  error:   { Icon: AlertTriangle, ring: "bg-red-500/12 text-red-500",         bar: "#ef4444" },
+  info:    { Icon: Bell,          ring: "bg-violet-500/12 text-violet-500",   bar: "#8b5cf6" },
+  ai:      { Icon: Sparkles,      ring: "bg-fuchsia-500/12 text-fuchsia-500", bar: "#d946ef" },
+};
+
+function Toast({ toast, onDismiss }) {
+  const { Icon, ring, bar } = TOAST_TONES[toast.tone] || TOAST_TONES.info;
+  const [leaving, setLeaving] = useState(false);
+  const duration = toast.duration ?? 4200;
+
+  const close = React.useCallback(() => {
+    setLeaving(true);
+    setTimeout(() => onDismiss(toast.id), 260); // let the exit animation finish
+  }, [toast.id, onDismiss]);
+
+  useEffect(() => {
+    const t = setTimeout(close, duration);
+    return () => clearTimeout(t);
+  }, [close, duration]);
+
+  return (
+    <div
+      className={"gc-toast relative overflow-hidden w-[min(360px,calc(100vw-2rem))] p-3.5 pr-10 flex items-start gap-3 pointer-events-auto " + (leaving ? "gc-toast-out" : "")}
+      role="status"
+      aria-live="polite"
+    >
+      <span className={"gc-toast-icon w-9 h-9 rounded-full flex items-center justify-center shrink-0 " + ring}>
+        <Icon size={17} />
+      </span>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="text-sm font-extrabold text-slate-900 leading-snug">{toast.title}</div>
+        {toast.body && <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">{toast.body}</div>}
+        {toast.actionLabel && (
+          <button
+            onClick={() => { toast.onAction?.(); close(); }}
+            className="mt-2 text-xs font-bold text-violet-600 hover:text-violet-800 inline-flex items-center gap-1 transition"
+          >
+            {toast.actionLabel} <ArrowRight size={12} />
+          </button>
+        )}
+      </div>
+      <button onClick={close} aria-label="Dismiss notification" className="absolute top-2.5 right-2.5 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-black/5 transition">
+        <X size={14} />
+      </button>
+      {/* hairline that drains for the life of the toast */}
+      <span
+        aria-hidden="true"
+        className="gc-toast-bar absolute bottom-0 left-0 h-[2px] w-full origin-left"
+        style={{ background: bar, animationDuration: duration + "ms" }}
+      />
+    </div>
+  );
+}
+
+function ToastStack({ toasts, onDismiss }) {
+  return (
+    <div className="fixed top-4 right-4 z-[120] flex flex-col gap-2.5 pointer-events-none" aria-label="Notifications">
+      {toasts.map((t) => <Toast key={t.id} toast={t} onDismiss={onDismiss} />)}
+    </div>
+  );
+}
 
 // ============================================================================
 // Command Palette (Cmd/Ctrl+K)
@@ -8442,12 +8833,58 @@ export default function App() {
     setJarvisOpen(true);
     setJarvisMobile(true);
   }, []);
+
+  // Toasts. notify({title, body, tone, actionLabel, onAction, duration}) from
+  // anywhere via useTheme(). Capped so a burst can't bury the screen.
+  const [toasts, setToasts] = useState([]);
+  const notify = React.useCallback((t) => {
+    const id = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random());
+    setToasts((list) => [...list, { id, tone: "info", ...(typeof t === "string" ? { title: t } : t) }].slice(-4));
+    return id;
+  }, []);
+  const dismissToast = React.useCallback((id) => setToasts((l) => l.filter((x) => x.id !== id)), []);
+
   const themeCtx = React.useMemo(
-    () => ({ theme, setTheme, openDetail, openCmd, openChat }),
-    [theme, openDetail, openCmd, openChat]
+    () => ({ theme, setTheme, openDetail, openCmd, openChat, notify }),
+    [theme, openDetail, openCmd, openChat, notify]
   );
 
   useEffect(() => { window.scrollTo(0, 0); }, [route, active]);
+
+  // Live notifications → toasts. The first snapshot is the existing backlog,
+  // so it only seeds the "seen" set; from then on any genuinely new unread
+  // notification (a DM, a comment on your post) slides in on screen.
+  const seenNotifs = useRef(null);
+  useEffect(() => {
+    if (!user?.uid) { seenNotifs.current = null; return; }
+    let unsub;
+    (async () => {
+      try {
+        const fb = await import("./firebase.js");
+        unsub = fb.onUserNotifications(user.uid, (rows) => {
+          if (seenNotifs.current === null) {
+            seenNotifs.current = new Set(rows.map((r) => r.id));
+            return;
+          }
+          rows
+            .filter((r) => !seenNotifs.current.has(r.id) && !r.read)
+            .reverse()
+            .forEach((r) => {
+              seenNotifs.current.add(r.id);
+              notify({
+                tone: r.type === "dm" ? "info" : "ai",
+                title: r.type === "dm" ? "New message" : "New activity",
+                body: r.text,
+                actionLabel: r.to ? "Open" : null,
+                onAction: r.to ? () => { setActive(r.to); setRoute("app"); } : null,
+              });
+            });
+          rows.forEach((r) => seenNotifs.current.add(r.id));
+        }, 12);
+      } catch { /* offline or rules block it — toasts just stay quiet */ }
+    })();
+    return () => unsub && unsub();
+  }, [user?.uid, notify]);
 
   // Decorative icons: hide them from assistive tech.
   //
@@ -8527,6 +8964,7 @@ export default function App() {
     setRoute("landing");
   };
 
+  const appReducedMotion = usePrefersReducedMotion();
   const activeModule = MODULES.find((m) => m.id === active) || MODULES[0];
   // The Copilot module embeds its own full-width chat, so the dock stands down there.
   const showJarvis = route === "app" && user && !needsOnboarding && active !== "copilot";
@@ -8594,8 +9032,16 @@ export default function App() {
     const locked = mod.finance && user.role === "Team Member";
     const View = MODULE_VIEWS[mod.id];
     content = (
-      <div className="min-h-screen bg-gray-100 flex">
-        <aside className="hidden lg:flex w-64 shrink-0 bg-white border-r border-gray-200 flex-col sticky top-0 h-screen lp-sidebar">
+      <div className="min-h-screen bg-gray-100 flex relative">
+        {/* Ambient depth for the workspace: a slow dot field that reacts to the
+            cursor, pinned behind everything and non-interactive. Same family as
+            the marketing surface so the two halves feel like one product. */}
+        {!appReducedMotion && (
+          <div className="fixed inset-0 z-0 pointer-events-none opacity-[.55]" aria-hidden="true">
+            <DotGrid dotSize={3} gap={34} baseColor="#e4e2ea" activeColor="#8b5cf6" proximity={120} shockRadius={200} shockStrength={3} className="w-full h-full" />
+          </div>
+        )}
+        <aside className="hidden lg:flex w-64 shrink-0 bg-white border-r border-gray-200 flex-col sticky top-0 h-screen lp-sidebar relative z-10">
           <SidebarNav active={active} setActive={setActive} user={user} onLogout={onLogout} />
         </aside>
         {mobileNav && (
@@ -8607,7 +9053,7 @@ export default function App() {
             </div>
           </div>
         )}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col relative z-10">
           <Topbar user={user} setUser={setUser} setActive={setActive} onLogout={onLogout} openMobileNav={() => setMobileNav(true)} company={company} />
           <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-7xl w-full mx-auto">
             {locked ? <LockedPanel module={mod} /> : <View module={mod} setActive={setActive} user={user} company={company} setCompany={setCompany} />}
@@ -8671,6 +9117,7 @@ export default function App() {
           openChat={openChat}
         />
         </ClickSpark>
+        <ToastStack toasts={toasts} onDismiss={dismissToast} />
       </div>
     </ThemeContext.Provider>
   );
