@@ -2865,13 +2865,50 @@ function Contact() {
   const [f, setF] = useState({ name: "", email: "", msg: "" });
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
   const socials = [Twitter, Linkedin, Github, Globe];
 
-  function submit() {
+  // Submissions go two ways on purpose:
+  //   1. Firestore `contacts` — the durable record. Needs no configuration
+  //      (the security rules already allow create-only from the client), so a
+  //      message is never lost even if mail delivery isn't set up yet.
+  //   2. POST /api/contact — verifies reCAPTCHA and sends the email.
+  // Firestore is awaited first; the email is best-effort on top of it. Only a
+  // total failure of BOTH is reported as an error to the sender.
+  async function submit() {
     if (!f.name.trim() || !f.msg.trim()) return setErr("Please add your name and a short message.");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email)) return setErr("That email doesn't look right — mind checking it?");
+    if (!EMAIL_RE.test(f.email.trim())) return setErr("That email doesn't look right — mind checking it?");
     setErr("");
-    setSent(true);
+    setBusy(true);
+
+    const payload = { name: f.name.trim(), email: f.email.trim(), message: f.msg.trim() };
+    let stored = false;
+    let mailed = false;
+
+    try {
+      const fb = await import("./firebase.js");
+      await fb.saveContactSubmission(payload);
+      stored = true;
+    } catch (e) {
+      console.warn("[contact] Firestore write failed:", e?.message || e);
+    }
+
+    try {
+      const recaptchaToken = await getRecaptchaToken("contact");
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, recaptchaToken }),
+      });
+      if (res.ok) mailed = true;
+      else console.warn("[contact] /api/contact responded", res.status);
+    } catch (e) {
+      console.warn("[contact] /api/contact unreachable:", e?.message || e);
+    }
+
+    setBusy(false);
+    if (stored || mailed) setSent(true);
+    else setErr("We couldn't send that — please email gencopilotfounder@gmail.com directly.");
   }
 
   return (
@@ -2911,13 +2948,16 @@ function Contact() {
               {err && <div className="text-sm font-semibold text-red-600 flex items-center gap-1.5"><AlertTriangle size={14} /> {err}</div>}
               <StarBorder
                 as="button"
-                className="w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+                className="w-full disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
                 color="#c4b5fd"
                 speed="5s"
                 innerClassName="bg-gradient-to-b from-violet-600 to-violet-800 border border-violet-500/40 text-white text-sm font-bold py-3 px-6"
                 onClick={submit}
+                disabled={busy}
               >
-                <span className="inline-flex items-center justify-center gap-2">Send message <Send size={15} /></span>
+                <span className="inline-flex items-center justify-center gap-2">
+                  {busy ? "Sending…" : <>Send message <Send size={15} /></>}
+                </span>
               </StarBorder>
             </div>
           )}
