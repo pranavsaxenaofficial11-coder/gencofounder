@@ -2963,6 +2963,10 @@ function Contact() {
 }
 
 // ------------------------------------------------------------ public: auth -
+// Shape check only. Whether the address actually EXISTS is proven by the
+// verification link, not by this pattern.
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
 function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
   const reducedMotion = usePrefersReducedMotion();
   const [name, setName] = useState("");
@@ -2977,8 +2981,7 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
   const [busy, setBusy] = useState(false);
 
   async function doLogin() {
-    if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(email.trim()))
-      return setErr("Enter a valid email to continue.");
+    if (!EMAIL_RE.test(email.trim())) return setErr("Enter a valid email to continue.");
     if (pw.length < 6) return setErr("Password needs at least 6 characters.");
     setErr("");
     setBusy(true);
@@ -3037,12 +3040,30 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
     setBusy(false);
   }
   async function doReset() {
-    if (!email) return setErr("Enter your email first.");
+    if (!email.trim()) return setErr("Enter your email first.");
+    if (!EMAIL_RE.test(email.trim())) return setErr("That email doesn't look right — check it and try again.");
+    setErr("");
     setBusy(true);
     try {
       const fb = await import("./firebase.js");
-      await fb.resetPassword(email);
-    } catch { /* silently succeed even if email doesn't exist */ }
+      await fb.resetPassword(email.trim());
+    } catch (e) {
+      // "No such user" is swallowed on purpose: confirming which addresses are
+      // registered would leak the user list. Real faults (provider disabled,
+      // rate limit, network) must NOT be swallowed — the old code reported
+      // "check your inbox" even when nothing had been sent.
+      const benign = e?.code === "auth/user-not-found" || e?.code === "auth/invalid-email";
+      if (!benign) {
+        setErr(
+          e?.code === "auth/too-many-requests" ? "Too many attempts. Wait a minute and try again."
+          : e?.code === "auth/operation-not-allowed" ? "Password reset isn't enabled for this project. Turn on Authentication → Sign-in method → Email/Password in the Firebase console."
+          : e?.code === "auth/network-request-failed" ? "Network error — check your connection and try again."
+          : e?.message || "Couldn't send the reset link. Try again."
+        );
+        setBusy(false);
+        return;
+      }
+    }
     setResetSent(true);
     setBusy(false);
   }
@@ -3115,9 +3136,13 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
               <div className="space-y-4">
                 <h3 className="text-2xl font-extrabold text-slate-900">Reset your password</h3>
                 <p className="text-sm text-slate-500">Enter the email you signed up with and we'll send a reset link.</p>
-                <Field label="Email" placeholder="you@startup.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Field label="Email" placeholder="you@startup.com" value={email} onChange={(e) => { setEmail(e.target.value); if (err) setErr(""); }} onKeyDown={(e) => e.key === "Enter" && doReset()} />
+                {err && <div className="text-sm font-semibold text-red-600 flex items-start gap-1.5" role="alert"><AlertTriangle size={14} className="mt-0.5 shrink-0" /> {err}</div>}
                 <Btn className="w-full py-3" onClick={doReset} disabled={busy}>{busy ? "Sending…" : "Send reset link"}</Btn>
-                <button onClick={() => setMode("login")} className="w-full text-sm font-semibold text-slate-500 hover:text-violet-700 transition">← Back to log in</button>
+                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                  Signed up with Google? You don't have a password — use “Continue with Google” on the log-in screen.
+                </p>
+                <button onClick={() => { setMode("login"); setErr(""); }} className="w-full text-sm font-semibold text-slate-500 hover:text-violet-700 transition">← Back to log in</button>
               </div>
             )
           ) : (
@@ -3159,7 +3184,7 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
 
               {mode === "login" && (
                 <div className="flex justify-end -mt-1">
-                  <button onClick={() => setMode("reset")} className="text-xs font-bold text-violet-600 hover:text-violet-800 transition">Forgot password?</button>
+                  <button onClick={() => { setMode("reset"); setErr(""); setResetSent(false); }} className="text-xs font-bold text-violet-600 hover:text-violet-800 transition">Forgot password?</button>
                 </div>
               )}
 
