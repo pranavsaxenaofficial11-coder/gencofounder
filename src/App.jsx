@@ -1059,15 +1059,20 @@ function useUserCollection(user, coll) {
     })();
     return () => unsub && unsub();
   }, [user?.uid, coll]);
+  // Toasts rather than alert(): a modal alert blocks the page until dismissed.
+  const { notify } = useTheme();
   const add = async (item) => {
-    if (!user?.uid) return alert("You're not signed in with a cloud account — log in to save data.");
-    try { const fb = await import("./firebase.js"); await fb.addItem(user.uid, coll, item); } catch (e) { alert("Save failed: " + (e?.message || e)); }
+    if (!user?.uid) return notify({ tone: "error", title: "Not signed in", body: "Log in with a cloud account to save data." });
+    try { const fb = await import("./firebase.js"); await fb.addItem(user.uid, coll, item); }
+    catch (e) { notify({ tone: "error", title: "Save failed", body: e?.message || String(e) }); }
   };
   const update = async (id, data) => {
-    try { const fb = await import("./firebase.js"); if (user?.uid) await fb.updateItem(user.uid, coll, id, data); } catch (e) { alert("Update failed: " + (e?.message || e)); }
+    try { const fb = await import("./firebase.js"); if (user?.uid) await fb.updateItem(user.uid, coll, id, data); }
+    catch (e) { notify({ tone: "error", title: "Update failed", body: e?.message || String(e) }); }
   };
   const remove = async (id) => {
-    try { const fb = await import("./firebase.js"); if (user?.uid) await fb.deleteItem(user.uid, coll, id); } catch (e) { alert("Delete failed: " + (e?.message || e)); }
+    try { const fb = await import("./firebase.js"); if (user?.uid) await fb.deleteItem(user.uid, coll, id); }
+    catch (e) { notify({ tone: "error", title: "Delete failed", body: e?.message || String(e) }); }
   };
   return { items, add, update, remove };
 }
@@ -1381,6 +1386,7 @@ const MODULES = [
   { id: "overview", name: "Founder Dashboard", track: "Founder Ops", icon: LayoutDashboard, blurb: "KPI charts, team progress, and risk alerts — your startup at a glance." },
   { id: "tasks", name: "Delegate & Tasks", track: "Founder Ops", icon: ListChecks, blurb: "Assign work to your team — or to your AI co-founder — with due dates and status." },
   { id: "meetings", name: "Meeting Command Center", track: "Founder Ops", icon: CalendarDays, blurb: "Schedule meetings, capture agendas and notes, and turn talk into action items." },
+  { id: "team", name: "Team & Access", track: "Founder Ops", icon: Users, blurb: "Your roster, their emails and roles, and who's working on what. Founders and admins can change roles and assign tasks." },
   { id: "pmf", name: "Product–Market Fit Validator", track: "Product & Customers", icon: Target, blurb: "Surveys, waitlists, and co-founder insights that tell you if demand is real." },
   { id: "feedback", name: "Customer Feedback Intelligence", track: "Product & Customers", icon: Inbox, blurb: "A unified feedback inbox with sentiment analysis and themes." },
   { id: "leads", name: "AI Lead Prioritization", track: "Growth & Retention", icon: Filter, blurb: "A scored, filterable lead table so sales time goes where revenue is." },
@@ -6851,6 +6857,35 @@ function timeAgo(ts) {
   return Math.floor(s / 86400) + "d ago";
 }
 
+// Firestore Timestamp | Date | millis -> Date, or null while a write is still
+// pending (serverTimestamp() resolves to null on the local echo).
+function toDate(ts) {
+  if (!ts) return null;
+  if (ts.toDate) return ts.toDate();
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Clock time on a message bubble: "4:07 pm".
+function clockTime(ts) {
+  const d = toDate(ts);
+  if (!d) return "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase();
+}
+
+// Separator above the first message of each day.
+function dayLabel(ts) {
+  const d = toDate(ts);
+  if (!d) return "";
+  const today = new Date();
+  const isSameDay = (a, b) => a.toDateString() === b.toDateString();
+  if (isSameDay(d, today)) return "Today";
+  const y = new Date(today); y.setDate(y.getDate() - 1);
+  if (isSameDay(d, y)) return "Yesterday";
+  const sameYear = d.getFullYear() === today.getFullYear();
+  return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
 function Avatar({ name, size = 40 }) {
   const initials = (name || "U").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
@@ -7189,19 +7224,41 @@ function DMPanel({ me, them, onClose }) {
               <div className="text-xs text-slate-400">This is the start of your conversation with {them.name.split(" ")[0]}.</div>
             </div>
           )}
-          {msgs.map((m) => (
-            <div
-              key={m.id}
-              className={
-                "gc-bubble gc-msg-in max-w-[80%] px-3.5 py-2 text-sm " +
-                (m.fromId === me.uid
-                  ? "gc-bubble-me ml-auto bg-violet-600 text-white"
-                  : "gc-bubble-them bg-black/5 text-slate-700")
-              }
-            >
-              {m.text}
-            </div>
-          ))}
+          {msgs.map((m, i) => {
+            const mine = m.fromId === me.uid;
+            // Day separator whenever the calendar date changes.
+            const prev = i > 0 ? msgs[i - 1] : null;
+            const dLabel = dayLabel(m.createdAt);
+            const showDay = dLabel && (!prev || dayLabel(prev.createdAt) !== dLabel);
+            return (
+              <React.Fragment key={m.id}>
+                {showDay && (
+                  <div className="flex items-center gap-3 py-1.5" aria-hidden="true">
+                    <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">{dLabel}</span>
+                    <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+                  </div>
+                )}
+                <div className={"flex flex-col " + (mine ? "items-end" : "items-start")}>
+                  <div
+                    className={
+                      "gc-bubble gc-msg-in max-w-[80%] px-3.5 py-2 text-sm " +
+                      (mine ? "gc-bubble-me bg-violet-600 text-white" : "gc-bubble-them bg-black/5 text-slate-700")
+                    }
+                  >
+                    {m.text}
+                  </div>
+                  <time
+                    className="text-[10px] text-slate-400 mt-1 px-1"
+                    dateTime={toDate(m.createdAt)?.toISOString() || undefined}
+                    title={toDate(m.createdAt)?.toLocaleString() || "Sending…"}
+                  >
+                    {clockTime(m.createdAt) || "sending…"}
+                  </time>
+                </div>
+              </React.Fragment>
+            );
+          })}
           <div ref={endRef} />
         </div>
         <div className="p-3 border-t flex gap-2" style={{ borderColor: "var(--border)" }}>
@@ -7652,14 +7709,28 @@ function useSub(uid, coll) {
     })();
     return () => unsub && unsub();
   }, [uid, coll]);
+  // Failures surface as toasts, not alert(). A modal alert blocks the whole
+  // page — including the animation loops — until it is dismissed.
+  // Each op resolves true only when the write actually landed, so callers can
+  // gate their own "saved!" confirmation on it rather than assuming success.
+  const { notify } = useTheme();
   const api = React.useMemo(() => ({
     async add(data) {
-      if (!uid) return alert("You're not signed in with a cloud account — log in to save data.");
-      try { const fb = await import("./firebase.js"); await fb.addSub(uid, coll, data); } catch (e) { alert("Save failed: " + (e?.message || e)); }
+      if (!uid) { notify({ tone: "error", title: "Not signed in", body: "Log in with a cloud account to save data." }); return false; }
+      try { const fb = await import("./firebase.js"); await fb.addSub(uid, coll, data); return true; }
+      catch (e) { notify({ tone: "error", title: "Save failed", body: e?.message || String(e) }); return false; }
     },
-    async upd(id, data) { try { const fb = await import("./firebase.js"); await fb.updSub(uid, coll, id, data); } catch (e) { alert("Update failed: " + (e?.message || e)); } },
-    async del(id) { try { const fb = await import("./firebase.js"); await fb.delSub(uid, coll, id); } catch (e) { alert("Delete failed: " + (e?.message || e)); } },
-  }), [uid, coll]);
+    async upd(id, data) {
+      if (!uid) { notify({ tone: "error", title: "Not signed in", body: "Log in with a cloud account to save changes." }); return false; }
+      try { const fb = await import("./firebase.js"); await fb.updSub(uid, coll, id, data); return true; }
+      catch (e) { notify({ tone: "error", title: "Update failed", body: e?.message || String(e) }); return false; }
+    },
+    async del(id) {
+      if (!uid) { notify({ tone: "error", title: "Not signed in", body: "Log in with a cloud account to make changes." }); return false; }
+      try { const fb = await import("./firebase.js"); await fb.delSub(uid, coll, id); return true; }
+      catch (e) { notify({ tone: "error", title: "Delete failed", body: e?.message || String(e) }); return false; }
+    },
+  }), [uid, coll, notify]);
   return [items, api];
 }
 
@@ -7676,6 +7747,244 @@ function LiveEmpty({ icon: Icon, title, sub, cta, onCta }) {
 
 function MiniInput(props) {
   return <input {...props} className={"rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none " + (props.className || "")} />;
+}
+
+// -------------------------------------------------------------------- Team --
+// Roster lives at companies/{founderUid}/team, so it is covered by the existing
+// "owner can read/write their whole workspace" rule — no rules change needed.
+const TEAM_ROLES = ["Founder", "Admin", "Team Member"];
+// Keys must exist in TONES — an unknown tone renders a broken class.
+const ROLE_TONE = { Founder: "blue", Admin: "amber", "Team Member": "emerald" };
+
+// Only a founder or admin may change roles / remove people. A team member sees
+// the roster read-only. This is a UI guard for a single-tenant workspace, not a
+// security boundary — everything here lives under the owner's own document
+// tree, so Firestore already restricts it to them.
+function canManageTeam(user) {
+  return user?.role === "Founder" || user?.role === "Admin";
+}
+
+function TeamModule({ module, user, company, setActive }) {
+  const { notify } = useTheme();
+  const [members, api] = useSub(user?.uid, "team");
+  const [tasks, taskApi] = useSub(user?.uid, "tasks");
+  const [form, setForm] = useState({ name: "", email: "", role: "Team Member", title: "" });
+  const [err, setErr] = useState("");
+  const [assigning, setAssigning] = useState(null); // member being assigned a task
+  const [taskTitle, setTaskTitle] = useState("");
+  const manage = canManageTeam(user);
+
+  // The signed-in founder is always shown first, even before anyone is added.
+  const self = {
+    id: "__self__",
+    name: user?.name || "You",
+    email: user?.email || "—",
+    role: user?.role || "Founder",
+    title: "Account owner",
+    isSelf: true,
+  };
+  const roster = [self, ...(members || [])];
+
+  // Confirmation only after the write actually lands — api.add resolves false
+  // when there's no cloud account or the rules reject it, and it raises its own
+  // error toast in that case.
+  async function addMember() {
+    const name = form.name.trim();
+    const email = form.email.trim();
+    if (!name) return setErr("Add a name.");
+    if (!EMAIL_RE.test(email)) return setErr("That email doesn't look right.");
+    if (roster.some((m) => (m.email || "").toLowerCase() === email.toLowerCase()))
+      return setErr("Someone with that email is already on the team.");
+    setErr("");
+    const ok = await api.add({ name, email, role: form.role, title: form.title.trim() || null, status: "invited" });
+    if (!ok) return;
+    notify({ tone: "success", title: name + " added", body: "Invite them to sign up with " + email + " to give them access." });
+    setForm({ name: "", email: "", role: "Team Member", title: "" });
+  }
+
+  async function assignTask(member) {
+    const t = taskTitle.trim();
+    if (!t) return;
+    const ok = await taskApi.add({ title: t, status: "todo", ai: false, assigneeName: member.name, assigneeEmail: member.email || null });
+    if (!ok) return;
+    notify({ tone: "success", title: "Task assigned", body: `“${t}” → ${member.name}`, actionLabel: "Open tasks", onAction: () => setActive("tasks") });
+    setTaskTitle("");
+    setAssigning(null);
+  }
+
+  async function changeRole(m, role) {
+    if (await api.upd(m.id, { role })) notify({ tone: "info", title: m.name + " is now " + role });
+  }
+
+  async function removeMember(m) {
+    if (await api.del(m.id)) notify({ tone: "info", title: m.name + " removed from the team" });
+  }
+
+  const taskCount = (m) => (tasks || []).filter((t) => t.assigneeName === m.name && (t.status || "todo") !== "done").length;
+  const doneCount = (m) => (tasks || []).filter((t) => t.assigneeName === m.name && t.status === "done").length;
+
+  return (
+    <ModuleShell module={module} companyLine={companyLineFrom(company)}>
+      {/* headline counts */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {[
+          { label: "People", to: roster.length, icon: Users },
+          { label: "Admins", to: roster.filter((m) => m.role === "Founder" || m.role === "Admin").length, icon: ShieldCheck },
+          { label: "Open tasks", to: (tasks || []).filter((t) => t.assigneeName && (t.status || "todo") !== "done").length, icon: ListChecks },
+          { label: "Completed", to: (tasks || []).filter((t) => t.assigneeName && t.status === "done").length, icon: Check },
+        ].map((k, i) => (
+          <AnimatedContent key={k.label} distance={30} duration={0.5} ease="power3.out" threshold={0.05} delay={i * 0.07}>
+            <SpotlightCard className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 h-full" spotlightColor="rgba(124, 58, 237, 0.14)">
+              <div className="flex items-center gap-2 text-slate-400"><k.icon size={15} /><span className="text-[11px] font-extrabold uppercase tracking-wider">{k.label}</span></div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1.5"><CountUp to={k.to} duration={1.2} /></div>
+            </SpotlightCard>
+          </AnimatedContent>
+        ))}
+      </div>
+
+      {/* add a teammate — founders/admins only */}
+      {manage && (
+        <Card className="p-4 mb-5">
+          <div className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2"><Plus size={15} className="text-violet-600" /> Add a teammate</div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
+            <MiniInput value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); if (err) setErr(""); }} placeholder="Full name" aria-label="Teammate name" />
+            <MiniInput value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); if (err) setErr(""); }} placeholder="name@company.com" aria-label="Teammate email" type="email" />
+            <MiniInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title (optional)" aria-label="Teammate title" />
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              aria-label="Teammate role"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+            >
+              {TEAM_ROLES.map((r) => <option key={r}>{r}</option>)}
+            </select>
+            <Btn variant="primary" className="py-2 text-sm" onClick={addMember} disabled={!form.name.trim() || !form.email.trim()}>
+              <Plus size={14} /> Add
+            </Btn>
+          </div>
+          {err && <div className="text-sm font-semibold text-red-600 flex items-center gap-1.5 mt-2.5" role="alert"><AlertTriangle size={14} /> {err}</div>}
+          <p className="text-[11px] text-slate-400 mt-2.5">
+            Adding someone records them on your roster and lets you assign work. They get their own workspace by signing up with that email.
+          </p>
+        </Card>
+      )}
+
+      {/* roster */}
+      {members === null ? (
+        <Card className="p-8 text-center text-sm text-slate-400">Loading your team…</Card>
+      ) : (
+        <div className="space-y-3">
+          {roster.map((m, i) => (
+            <AnimatedContent key={m.id} distance={24} duration={0.45} ease="power3.out" threshold={0.05} delay={Math.min(i, 6) * 0.05}>
+              <Card className="p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Avatar name={m.name} size={42} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-slate-900 truncate">{m.name}</span>
+                      {m.isSelf && <Badge tone="blue">You</Badge>}
+                      {m.status === "invited" && !m.isSelf && <Badge tone="amber">Invited</Badge>}
+                    </div>
+                    <a
+                      href={m.email && m.email !== "—" ? "mailto:" + m.email : undefined}
+                      className="text-xs text-slate-500 hover:text-violet-700 transition truncate block"
+                    >
+                      {m.email}
+                    </a>
+                    {m.title && <div className="text-[11px] text-slate-400 mt-0.5">{m.title}</div>}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                      <span className="font-bold text-slate-600">{taskCount(m)}</span> open · {doneCount(m)} done
+                    </span>
+
+                    {/* role: editable by managers, except on your own row */}
+                    {manage && !m.isSelf ? (
+                      <select
+                        value={m.role || "Team Member"}
+                        onChange={(e) => changeRole(m, e.target.value)}
+                        aria-label={"Role for " + m.name}
+                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-bold focus:border-violet-500 focus:outline-none"
+                      >
+                        {TEAM_ROLES.map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                    ) : (
+                      <Badge tone={ROLE_TONE[m.role] || "blue"}>{m.role}</Badge>
+                    )}
+
+                    {manage && (
+                      <Btn variant="ghost" className="px-3 py-1.5 text-xs" onClick={() => { setAssigning(assigning === m.id ? null : m.id); setTaskTitle(""); }}>
+                        <ListChecks size={13} /> Assign
+                      </Btn>
+                    )}
+                    {manage && !m.isSelf && (
+                      <button
+                        onClick={() => removeMember(m)}
+                        aria-label={"Remove " + m.name}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
+                      >
+                        <X size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* inline task assignment */}
+                {assigning === m.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-2 anim-fadeUp">
+                    <MiniInput
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && assignTask(m)}
+                      placeholder={"What should " + m.name.split(" ")[0] + " work on?"}
+                      aria-label={"Task for " + m.name}
+                      className="flex-1 min-w-[220px]"
+                      autoFocus
+                    />
+                    <Btn variant="primary" className="px-4 py-2 text-sm" onClick={() => assignTask(m)} disabled={!taskTitle.trim()}>Assign</Btn>
+                    <Btn variant="ghost" className="px-3 py-2 text-sm" onClick={() => setAssigning(null)}>Cancel</Btn>
+                  </div>
+                )}
+
+                {/* what they're currently on */}
+                {taskCount(m) > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-1.5">
+                    {(tasks || [])
+                      .filter((t) => t.assigneeName === m.name && (t.status || "todo") !== "done")
+                      .slice(0, 4)
+                      .map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setActive("tasks")}
+                          className="text-[11px] font-semibold rounded-full bg-violet-50 text-violet-700 px-2.5 py-1 hover:bg-violet-100 transition max-w-[240px] truncate"
+                          title={t.title}
+                        >
+                          {t.title}
+                        </button>
+                      ))}
+                    {taskCount(m) > 4 && <span className="text-[11px] text-slate-400 self-center">+{taskCount(m) - 4} more</span>}
+                  </div>
+                )}
+              </Card>
+            </AnimatedContent>
+          ))}
+
+          {members.length === 0 && (
+            <Card className="p-8 text-center">
+              <span className="w-12 h-12 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center mx-auto mb-3"><Users size={22} /></span>
+              <div className="text-sm font-bold text-slate-700">It's just you so far</div>
+              <div className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                {manage
+                  ? "Add your co-founders and teammates above — then you can assign them work and track what everyone's on."
+                  : "Your founder hasn't added anyone else yet."}
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </ModuleShell>
+  );
 }
 
 // ---------------------------------------------------------------- Overview --
@@ -7847,8 +8156,14 @@ function TasksLive({ module, user, company }) {
                 {(tasks || []).filter((t) => (t.status || "todo") === key).map((t) => (
                   <div key={t.id} className="rounded-xl bg-gray-100 p-3">
                     <div className="text-sm font-bold text-slate-800 break-words">{t.title}</div>
+                    {t.assigneeName && (
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-500" title={t.assigneeEmail || undefined}>
+                        <Avatar name={t.assigneeName} size={16} />
+                        <span className="font-semibold truncate">{t.assigneeName}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5 mt-2">
-                      <button onClick={() => api.upd(t.id, { ai: !t.ai })} className={"px-2 py-0.5 rounded-full text-[10px] font-extrabold transition " + (t.ai ? "bg-violet-600 text-white" : "bg-white text-slate-500")}>{t.ai ? "AI co-founder" : "You"}</button>
+                      <button onClick={() => api.upd(t.id, { ai: !t.ai })} className={"px-2 py-0.5 rounded-full text-[10px] font-extrabold transition " + (t.ai ? "bg-violet-600 text-white" : "bg-white text-slate-500")}>{t.ai ? "AI co-founder" : t.assigneeName ? t.assigneeName.split(" ")[0] : "You"}</button>
                       <span className="flex-1" />
                       {key !== "todo" && <button onClick={() => move(t, -1)} className="p-1 rounded hover:bg-white"><ChevronLeft size={14} className="text-slate-500" /></button>}
                       {key !== "done" && <button onClick={() => move(t, 1)} className="p-1 rounded hover:bg-white"><ChevronRight size={14} className="text-slate-500" /></button>}
@@ -8302,6 +8617,7 @@ const MODULE_VIEWS = {
   interview: InterviewModule,
   news: NewsModule,
   markets: MarketsLive,
+  team: TeamModule,
   talent: TalentModule,
   messages: MessagesModule,
   profile: ProfileModule,
