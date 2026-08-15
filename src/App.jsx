@@ -2942,8 +2942,14 @@ function Contact() {
             <Badge tone="blue" className="absolute top-4 right-4 bg-white">Interactive map</Badge>
           </Card>
           <Card className="p-6 space-y-4">
-            <div className="flex items-center gap-3 text-sm"><span className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><Mail size={16} /></span><span className="font-semibold text-slate-700">hello@gencopilot.app</span></div>
-            <div className="flex items-center gap-3 text-sm"><span className="w-9 h-9 rounded-xl bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center"><Phone size={16} /></span><span className="font-semibold text-slate-700">+91 11 4100 0000 · Mon–Fri, 10:00–18:00 IST</span></div>
+            <a href="mailto:gencopilotfounder@gmail.com" className="flex items-center gap-3 text-sm group">
+              <span className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0"><Mail size={16} /></span>
+              <span className="font-semibold text-slate-700 group-hover:text-violet-700 transition break-all">gencopilotfounder@gmail.com</span>
+            </a>
+            <a href="tel:+918383049373" className="flex items-center gap-3 text-sm group">
+              <span className="w-9 h-9 rounded-xl bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center shrink-0"><Phone size={16} /></span>
+              <span className="font-semibold text-slate-700 group-hover:text-fuchsia-700 transition">+91 83830 49373 · Mon–Fri, 10:00–18:00 IST</span>
+            </a>
             <div className="pt-2 border-t border-gray-100 flex gap-2.5">
               {socials.map((Icon, i) => (
                 <Magnet key={i} padding={28} magnetStrength={4} disabled={reducedMotion}>
@@ -7114,7 +7120,7 @@ function PrivacyModule({ module, company }) {
     ["AI processing", "When you use the co-founder chat, your prompt and relevant company context are sent to our AI provider to generate a response. Conversations aren't used to train third-party models."],
     ["Data storage", "Data is stored securely in Google Firebase (Firestore) with access controlled by authentication. Only you can read or write your workspace data."],
     ["Your rights", "You can view, edit, or delete your data at any time from the Company Data and Profile pages. To fully delete your account, contact us."],
-    ["Contact", "Questions about privacy? Reach us at hello@gencopilot.app."],
+    ["Contact", "Questions about privacy? Reach us at gencopilotfounder@gmail.com."],
   ];
   return (
     <ModuleShell module={module} noChat companyLine={companyLineFrom(company)}>
