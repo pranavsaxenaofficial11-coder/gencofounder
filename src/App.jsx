@@ -2270,6 +2270,44 @@ const LEGAL = {
   },
 };
 
+// Shared popup for the LEGAL texts (Privacy / Terms / Security) — used by the
+// footer links and by the auth form's agreement line.
+function LegalModal({ k, onClose, onContact }) {
+  if (!k) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,.6)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={LEGAL[k].title}
+    >
+      <div
+        className="bg-white max-w-2xl w-full max-h-[80vh] overflow-auto p-8 scroll-thin mo-trace"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-6">
+          <h2 className="text-2xl font-extrabold text-slate-900">{LEGAL[k].title}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-slate-900 transition shrink-0">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="mo-rule mt-4 mb-5" />
+        {LEGAL[k].body.map((para, i) => (
+          <p key={i} className={"text-sm leading-relaxed mb-3 " + (i === 0 ? "mono text-slate-500 uppercase text-[11px]" : "text-slate-700")}>
+            {para}
+          </p>
+        ))}
+        <div className="mt-6 flex gap-3">
+          {onContact && <Btn onClick={onContact}>Contact us</Btn>}
+          <Btn variant="ghost" onClick={onClose}>Close</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FooterBig({ go, onAuth }) {
   const [email, setEmail] = useState("");
   const [ok, setOk] = useState(false);
@@ -2361,42 +2399,7 @@ function FooterBig({ go, onAuth }) {
         </div>
       </div>
 
-      {legal && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,.6)" }}
-          onClick={() => setLegal(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={LEGAL[legal].title}
-        >
-          <div
-            className="bg-white max-w-2xl w-full max-h-[80vh] overflow-auto p-8 scroll-thin mo-trace"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-6">
-              <h2 className="text-2xl font-extrabold text-slate-900">{LEGAL[legal].title}</h2>
-              <button
-                onClick={() => setLegal(null)}
-                aria-label="Close"
-                className="text-slate-500 hover:text-slate-900 transition shrink-0"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="mo-rule mt-4 mb-5" />
-            {LEGAL[legal].body.map((para, i) => (
-              <p key={i} className={"text-sm leading-relaxed mb-3 " + (i === 0 ? "mono text-slate-500 uppercase text-[11px]" : "text-slate-700")}>
-                {para}
-              </p>
-            ))}
-            <div className="mt-6 flex gap-3">
-              <Btn onClick={() => { setLegal(null); go("contact"); }}>Contact us</Btn>
-              <Btn variant="ghost" onClick={() => setLegal(null)}>Close</Btn>
-            </div>
-          </div>
-        </div>
-      )}
+      <LegalModal k={legal} onClose={() => setLegal(null)} onContact={() => { setLegal(null); go("contact"); }} />
     </footer>
   );
 }
@@ -2969,18 +2972,28 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
   const [role, setRole] = useState("Founder");
   const [err, setErr] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [verifySent, setVerifySent] = useState(false);
+  const [legal, setLegal] = useState(null);
   const [busy, setBusy] = useState(false);
 
   async function doLogin() {
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setErr("Enter a valid email to continue.");
+    if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(email.trim()))
+      return setErr("Enter a valid email to continue.");
     if (pw.length < 6) return setErr("Password needs at least 6 characters.");
     setErr("");
     setBusy(true);
     try {
       const fb = await import("./firebase.js");
       const u = mode === "signup"
-        ? await fb.signupWithEmail(email, pw, name || email.split("@")[0], role)
-        : await fb.loginWithEmail(email, pw);
+        ? await fb.signupWithEmail(email.trim(), pw, name || email.split("@")[0], role)
+        : await fb.loginWithEmail(email.trim(), pw);
+      // Signup no longer signs in: it sends a verification link and returns a
+      // marker, and the account only works after the link is clicked.
+      if (u && u.verificationSent) {
+        setVerifySent(true);
+        setBusy(false);
+        return;
+      }
       // App's onAuthChange fills in the profile but deliberately never routes
       // (a returning session shouldn't yank a visitor off the marketing site),
       // so entering the dashboard has to be driven from here. Stay `busy` on
@@ -2990,6 +3003,10 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
     } catch (e) {
       const msg = e?.code === "auth/user-not-found" ? "No account with that email. Sign up instead?"
         : e?.code === "auth/wrong-password" ? "Wrong password. Try again or reset it."
+        : e?.code === "auth/invalid-credential" ? "Email or password is incorrect. If you signed up with Google, use “Continue with Google” below — that account has no password."
+        : e?.code === "auth/email-not-verified" ? "That email isn't verified yet. We've just sent you a fresh verification link — click it, then log in."
+        : e?.code === "auth/too-many-requests" ? "Too many attempts. Wait a minute, then try again — or reset your password."
+        : e?.code === "auth/operation-not-allowed" ? "Email/password sign-in isn't enabled. In the Firebase console turn on Authentication → Sign-in method → Email/Password."
         : e?.code === "auth/email-already-in-use" ? "Email already registered. Log in instead?"
         : e?.code === "auth/weak-password" ? "Password too weak — use at least 6 characters."
         : e?.message || "Something went wrong. Try again.";
@@ -3076,7 +3093,17 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
             </div>
           )}
 
-          {mode === "reset" ? (
+          {verifySent ? (
+            <div className="text-center py-6">
+              <span className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto"><Mail size={24} /></span>
+              <h3 className="text-xl font-extrabold mt-4 text-slate-900">Verify your email</h3>
+              <p className="text-sm text-slate-500 mt-2">
+                We sent a verification link to <span className="font-bold text-slate-700">{email}</span>.
+                Click it, then log in. No email? Check spam — or the address may not exist.
+              </p>
+              <Btn className="mt-6" onClick={() => { setVerifySent(false); setMode("login"); setErr(""); }}>Go to log in <ArrowRight size={15} /></Btn>
+            </div>
+          ) : mode === "reset" ? (
             resetSent ? (
               <div className="text-center py-6">
                 <span className="w-14 h-14 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center mx-auto"><Mail size={24} /></span>
@@ -3153,6 +3180,13 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
                 </span>
               </StarBorder>
 
+              <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                By continuing you agree to our{" "}
+                <button onClick={() => setLegal("Terms")} className="font-bold text-violet-600 hover:text-violet-800 underline underline-offset-2">Terms</button>
+                {" "}and{" "}
+                <button onClick={() => setLegal("Privacy")} className="font-bold text-violet-600 hover:text-violet-800 underline underline-offset-2">Privacy Policy</button>.
+              </p>
+
               <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold"><span className="h-px bg-gray-200 flex-1" />or<span className="h-px bg-gray-200 flex-1" /></div>
 
               <Btn variant="ghost" className="w-full py-3" onClick={google} disabled={busy}><GoogleG /> Continue with Google</Btn>
@@ -3166,6 +3200,7 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
           )}
         </Card>
       </div>
+      <LegalModal k={legal} onClose={() => setLegal(null)} />
     </div>
   );
 }
@@ -8315,7 +8350,13 @@ export default function App() {
     return () => clearTimeout(t);
   }, [company, user]);
 
-  const [theme, setTheme] = useState("light");
+  // Dark is the default look; an explicit choice (theme toggle) is remembered.
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("gc-theme") || "dark"; } catch { return "dark"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("gc-theme", theme); } catch { /* private mode */ }
+  }, [theme]);
   const [detail, setDetail] = useState(null);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [chatSeed, setChatSeed] = useState(null);

@@ -8,7 +8,7 @@
 
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail, EmailAuthProvider, linkWithCredential, linkWithPopup } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail, sendEmailVerification, EmailAuthProvider, linkWithCredential, linkWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs, addDoc, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 
 // ─── PASTE YOUR FIREBASE CONFIG HERE ────────────────────────────────────
@@ -118,6 +118,17 @@ export async function loginAnonymously() {
 
 export async function loginWithEmail(email, password) {
   const result = await signInWithEmailAndPassword(auth, email, password);
+  // A password account that never clicked its verification link doesn't get
+  // in: send a fresh link (best-effort — Firebase rate-limits repeats), end
+  // the session, and surface a dedicated code for the form to explain.
+  const hasPassword = result.user.providerData.some((p) => p.providerId === "password");
+  if (hasPassword && !result.user.emailVerified) {
+    await sendEmailVerification(result.user).catch(() => {});
+    await signOut(auth);
+    const err = new Error("Email not verified");
+    err.code = "auth/email-not-verified";
+    throw err;
+  }
   // Stamps lastLogin, and backfills the doc if the account predates it.
   await ensureUserDoc(result.user);
   return result.user;
@@ -125,13 +136,12 @@ export async function loginWithEmail(email, password) {
 
 export async function signupWithEmail(email, password, displayName, role = "Founder") {
   const guest = auth.currentUser?.isAnonymous ? auth.currentUser : null;
+  let user = null;
   if (guest) {
     try {
       const cred = EmailAuthProvider.credential(email, password);
       const linked = await linkWithCredential(guest, cred);
-      await updateProfile(linked.user, { displayName });
-      await ensureUserDoc(linked.user, role);
-      return linked.user;
+      user = linked.user;
     } catch (e) {
       // Not "already in use" → a real failure (weak password, bad email).
       // Surface it rather than retrying and getting a confusing second error.
@@ -140,10 +150,18 @@ export async function signupWithEmail(email, password, displayName, role = "Foun
       // auth/email-already-in-use so the form says "log in instead".
     }
   }
-  const result = await createUserWithEmailAndPassword(auth, email, password);
-  await updateProfile(result.user, { displayName });
-  await ensureUserDoc(result.user, role);
-  return result.user;
+  if (!user) {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    user = result.user;
+  }
+  await updateProfile(user, { displayName });
+  await ensureUserDoc(user, role);
+  // The address has to prove it's real before the account can be used:
+  // send the link, then sign out — loginWithEmail refuses unverified
+  // password accounts, so typing a made-up email goes nowhere.
+  await sendEmailVerification(user).catch(() => {});
+  await signOut(auth);
+  return { verificationSent: true, email };
 }
 
 export async function resetPassword(email) {
