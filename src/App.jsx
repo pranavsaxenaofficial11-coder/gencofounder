@@ -15,6 +15,16 @@ import {
   SpecimenPlate, OpposingMarquee, HalftoneField,
   ScrubWipe, PinnedSteps, ScrubCounter, useScrollTriggerRefresh,
 } from "./graphics.jsx";
+// React Bits (reactbits.dev) building blocks, installed via the shadcn CLI.
+import Aurora from "@/components/Aurora.jsx";
+import ClickSpark from "@/components/ClickSpark.jsx";
+import AnimatedContent from "@/components/AnimatedContent.jsx";
+import SplitText from "@/components/SplitText.jsx";
+import BlurText from "@/components/BlurText.jsx";
+import ShinyText from "@/components/ShinyText.jsx";
+import GradientText from "@/components/GradientText.jsx";
+import StarBorder from "@/components/StarBorder.jsx";
+import SpotlightCard from "@/components/SpotlightCard.jsx";
 
 // ---------------------------------------------------------------------------
 // reCAPTCHA v3 config
@@ -1180,6 +1190,22 @@ function MoBtn({ children, variant = "primary", inverted = false, className = ""
 }
 
 // Drifts an element against the scroll.
+// The mo-* entrance system already honors reduced motion in the CSS layer;
+// the React Bits pieces (WebGL Aurora, GSAP SplitText) are JS-driven, so they
+// gate on this hook instead and fall back to the CSS-managed variants.
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const on = (e) => setReduced(e.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return reduced;
+}
+
 function useParallax(strength = 0.12) {
   const ref = useRef(null);
   useEffect(() => {
@@ -2363,6 +2389,7 @@ function FooterBig({ go, onAuth }) {
 // --------------------------------------------------------- public: landing -
 function Landing({ go, onAuth }) {
   const previewRef = useParallax(0.05);
+  const reducedMotion = usePrefersReducedMotion();
   return (
     <div>
       {/* Hero */}
@@ -2371,6 +2398,13 @@ function Landing({ go, onAuth }) {
         <div className="absolute inset-0 mo-halftone pointer-events-none" aria-hidden="true">
           <HalftoneField />
         </div>
+        {/* WebGL aurora in brand violet/fuchsia — plain alpha compositing so it
+            reads on the light editorial ground as well as the dark theme */}
+        {!reducedMotion && (
+          <div className="absolute inset-0 pointer-events-none opacity-60" aria-hidden="true">
+            <Aurora colorStops={["#7c3aed", "#d946ef", "#4f46e5"]} amplitude={1.0} blend={0.55} speed={0.7} />
+          </div>
+        )}
         <div className="max-w-7xl mx-auto px-4 md:px-6 pt-16 pb-20 md:pt-24 md:pb-28 grid lg:grid-cols-2 gap-14 items-center relative">
           <div>
             <div className="mono text-[11px] uppercase text-zinc-500 mb-5 flex items-center gap-2">
@@ -2378,8 +2412,32 @@ function Landing({ go, onAuth }) {
               <MoChars text="New · AI-native startup operating system" delay={120} step={18} />
             </div>
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
-              <MoLine delay={260}>Your AI Copilot for</MoLine>
-              <MoLine delay={400} className="italic">Startup Success</MoLine>
+              {reducedMotion ? (
+                <MoLine delay={260}>Your AI Copilot for</MoLine>
+              ) : (
+                <SplitText
+                  tag="span"
+                  className="block"
+                  text="Your AI Copilot for"
+                  splitType="chars"
+                  delay={28}
+                  duration={0.9}
+                  from={{ opacity: 0, y: 46 }}
+                  to={{ opacity: 1, y: 0 }}
+                  textAlign="left"
+                />
+              )}
+              <MoLine delay={480} className="italic">
+                <ShinyText
+                  text="Startup Success"
+                  disabled={reducedMotion}
+                  speed={3.2}
+                  delay={1}
+                  color="#7c3aed"
+                  shineColor="#d946ef"
+                  spread={110}
+                />
+              </MoLine>
             </h1>
             <div className="mo-rule mo-rule-thick mt-6 max-w-xl" style={{ animationDelay: "620ms" }} />
             <p className="mt-5 text-lg text-zinc-400 leading-relaxed max-w-xl">
@@ -2574,7 +2632,13 @@ function Landing({ go, onAuth }) {
           </div>
           <div className="relative">
             <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-              <MoLine delay={0}>Stop guessing. Start piloting.</MoLine>
+              {reducedMotion ? (
+                <MoLine delay={0}>Stop guessing. Start piloting.</MoLine>
+              ) : (
+                <GradientText colors={["#ffffff", "#f5d0fe", "#ffffff"]} animationSpeed={7}>
+                  Stop guessing. Start piloting.
+                </GradientText>
+              )}
             </h3>
             <div className="mo-rule mx-auto mt-5" style={{ width: 120, background: "var(--fg)" }} />
             <p className="mt-5 text-white/85 max-w-xl mx-auto">
@@ -2730,6 +2794,7 @@ function Contact() {
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-16">
       <SectionHead center kicker="Contact" title="Talk to a human (we have several)" desc="Questions, partnerships, or a demo for your team — we reply within one business day." />
       <div className="mt-12 grid lg:grid-cols-2 gap-6 items-start">
+        <AnimatedContent distance={48} duration={0.7} ease="power3.out" threshold={0.15}>
         <Card className="p-7">
           {sent ? (
             <div className="text-center py-10 anim-fadeUp">
@@ -2753,11 +2818,22 @@ function Contact() {
                 />
               </label>
               {err && <div className="text-sm font-semibold text-red-600 flex items-center gap-1.5"><AlertTriangle size={14} /> {err}</div>}
-              <Btn className="w-full py-3" onClick={submit}>Send message <Send size={15} /></Btn>
+              <StarBorder
+                as="button"
+                className="w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+                color="#c4b5fd"
+                speed="5s"
+                innerClassName="bg-gradient-to-b from-violet-600 to-violet-800 border border-violet-500/40 text-white text-sm font-bold py-3 px-6"
+                onClick={submit}
+              >
+                <span className="inline-flex items-center justify-center gap-2">Send message <Send size={15} /></span>
+              </StarBorder>
             </div>
           )}
         </Card>
+        </AnimatedContent>
 
+        <AnimatedContent distance={48} duration={0.7} ease="power3.out" threshold={0.15} delay={0.12}>
         <div className="space-y-5">
           <Card className="h-72 relative overflow-hidden map-grid bg-violet-50">
             <div className="absolute inset-0 flex items-center justify-center">
@@ -2786,6 +2862,7 @@ function Contact() {
             </div>
           </Card>
         </div>
+        </AnimatedContent>
       </div>
     </div>
   );
@@ -2920,7 +2997,9 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
             )
           ) : (
             <div className="space-y-4">
-              <h3 className="text-2xl font-extrabold text-slate-900">{mode === "login" ? "Welcome back" : "Create your free account"}</h3>
+              <h3 className="text-2xl font-extrabold text-slate-900">
+                <BlurText key={mode} text={mode === "login" ? "Welcome back" : "Create your free account"} animateBy="words" delay={90} stepDuration={0.28} />
+              </h3>
               {mode === "signup" && <Field label="Full name" placeholder="Ada Lovelace" value={name} onChange={(e) => setName(e.target.value)} />}
               <Field label="Email" placeholder="you@startup.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doLogin()} />
               <label className="block">
@@ -2961,10 +3040,20 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
 
               {err && <div className="text-sm font-semibold text-red-600 flex items-center gap-1.5"><AlertTriangle size={14} /> {err}</div>}
 
-              <Btn className="w-full py-3" onClick={doLogin} disabled={busy}>
-                {busy ? "Just a moment…" : (mode === "login" ? "Log in" : "Create free account")}
-                {!busy && <ArrowRight size={15} />}
-              </Btn>
+              <StarBorder
+                as="button"
+                className="w-full disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+                color="#c4b5fd"
+                speed="5s"
+                innerClassName="bg-gradient-to-b from-violet-600 to-violet-800 border border-violet-500/40 text-white text-sm font-bold py-3 px-6"
+                onClick={doLogin}
+                disabled={busy}
+              >
+                <span className="inline-flex items-center justify-center gap-2">
+                  {busy ? "Just a moment…" : (mode === "login" ? "Log in" : "Create free account")}
+                  {!busy && <ArrowRight size={15} />}
+                </span>
+              </StarBorder>
 
               <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold"><span className="h-px bg-gray-200 flex-1" />or<span className="h-px bg-gray-200 flex-1" /></div>
 
@@ -3226,7 +3315,9 @@ function ModuleShell({ module, children, noChat = false, companyLine }) {
     <div className="anim-fadeUp">
       <div className="mb-6">
         <Badge tone="emerald" className="mb-2">{module.track}</Badge>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">{module.name}</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+          <BlurText key={module.id} text={module.name} animateBy="words" delay={70} stepDuration={0.25} />
+        </h1>
         <p className="text-sm text-zinc-400 mt-1.5 max-w-2xl">{module.blurb}</p>
       </div>
       {children}
@@ -7114,11 +7205,15 @@ function OverviewLive({ module, user, company, setActive }) {
     <ModuleShell module={module} companyLine={companyLineFrom(company)}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {kpis.map((k) => (
-          <Card key={k.label} className="p-4">
+          <SpotlightCard
+            key={k.label}
+            className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4"
+            spotlightColor="rgba(124, 58, 237, 0.14)"
+          >
             <div className="flex items-center gap-2 text-slate-400"><k.icon size={15} /><span className="text-[11px] font-extrabold uppercase tracking-wider">{k.label}</span></div>
             <div className="text-2xl font-extrabold text-slate-900 mt-1.5">{k.value}</div>
             <div className="text-xs text-slate-400 mt-0.5">{k.sub}</div>
-          </Card>
+          </SpotlightCard>
         ))}
       </div>
 
@@ -8304,6 +8399,7 @@ export default function App() {
     <ThemeContext.Provider value={themeCtx}>
       <div className={"lp-root theme-" + theme}>
         <style>{GLOBAL_CSS}</style>
+        <ClickSpark sparkColor="#a78bfa" sparkSize={9} sparkRadius={18} sparkCount={8} duration={450}>
         {content}
         {showJarvis && (
           <button
@@ -8328,6 +8424,7 @@ export default function App() {
           setTheme={setTheme}
           openChat={openChat}
         />
+        </ClickSpark>
       </div>
     </ThemeContext.Provider>
   );

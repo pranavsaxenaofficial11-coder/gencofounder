@@ -25,7 +25,7 @@ const BlurText = ({
   onAnimationComplete,
   stepDuration = 0.35
 }) => {
-  const elements = animateBy === 'words' ? text.split('') : text.split('');
+  const elements = animateBy === 'words' ? text.split(' ') : text.split('');
   const [inView, setInView] = useState(false);
   const ref = useRef(null);
 
@@ -64,7 +64,7 @@ const BlurText = ({
   );
 
   return (
-    <p ref={ref} className={`blur-text ${className} flex flex-wrap`}>
+    <span ref={ref} className={`blur-text ${className} inline-flex flex-wrap`}>
       {elements.map((segment, index) => {
         const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots);
 
@@ -83,12 +83,12 @@ const BlurText = ({
             animate={inView ? animateKeyframes : fromSnapshot}
             transition={spanTransition}
             onAnimationComplete={index === elements.length - 1 ? onAnimationComplete : undefined}>
-            {segment === '' ? '' : segment}
-            {animateBy === 'words' && index < elements.length - 1 && ''}
+            {segment === ' ' ? ' ' : segment}
+            {animateBy === 'words' && index < elements.length - 1 && ' '}
           </motion.span>
         );
       })}
-    </p>
+    </span>
   );
 };
 

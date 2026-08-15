@@ -14,20 +14,19 @@ const ClickSpark = ({
   const sparksRef = useRef([]);
   const startTimeRef = useRef(null);
 
+  // App-wide adaptation: the canvas is a fixed, viewport-sized overlay instead
+  // of filling the parent — wrapping the whole (document-height) app would
+  // otherwise allocate a canvas thousands of pixels tall.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const parent = canvas.parentElement;
-    if (!parent) return;
-
     let resizeTimeout;
 
     const resizeCanvas = () => {
-      const { width, height } = parent.getBoundingClientRect();
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
+      if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
       }
     };
 
@@ -36,13 +35,12 @@ const ClickSpark = ({
       resizeTimeout = setTimeout(resizeCanvas, 100);
     };
 
-    const ro = new ResizeObserver(handleResize);
-    ro.observe(parent);
+    window.addEventListener('resize', handleResize);
 
     resizeCanvas();
 
     return () => {
-      ro.disconnect();
+      window.removeEventListener('resize', handleResize);
       clearTimeout(resizeTimeout);
     };
   }, []);
@@ -113,9 +111,10 @@ const ClickSpark = ({
   const handleClick = e => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // Fixed viewport canvas: client coords are canvas coords.
+    const x = e.clientX;
+    const y = e.clientY;
 
     const now = performance.now();
     const newSparks = Array.from({ length: sparkCount }, (_, i) => ({
@@ -129,10 +128,10 @@ const ClickSpark = ({
   };
 
   return (
-    <div className="relative w-full h-full" onClick={handleClick}>
+    <div onClick={handleClick}>
       <canvas
         ref={canvasRef}
-        className="w-full h-full block absolute top-0 left-0 select-none pointer-events-none" />
+        className="fixed inset-0 z-[95] block select-none pointer-events-none" />
       {children}
     </div>
   );

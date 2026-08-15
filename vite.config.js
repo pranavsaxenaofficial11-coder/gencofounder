@@ -37,6 +37,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ["react", "react-dom"],
           charts: ["recharts"],
+          fx: ["gsap", "@gsap/react", "motion", "ogl"],
         },
       },
     },

@@ -4,6 +4,7 @@ const StarBorder = ({
   color = 'white',
   speed = '6s',
   thickness = 1,
+  innerClassName = 'bg-gradient-to-b from-black to-gray-900 border border-gray-800 text-white text-[16px] py-[16px] px-[26px]',
   children,
   ...rest
 }) => {
@@ -27,8 +28,7 @@ const StarBorder = ({
           background: `radial-gradient(circle, ${color}, transparent 10%)`,
           animationDuration: speed
         }}></div>
-      <div
-        className="relative z-1 bg-gradient-to-b from-black to-gray-900 border border-oklch(0.92 0.004 286.32) border-gray-800 text-white text-center text-[16px] py-[16px] px-[26px] rounded-[20px] dark:border-oklch(1 0 0 / 10%)">
+      <div className={`relative z-1 text-center rounded-[20px] ${innerClassName}`}>
         {children}
       </div>
     </Component>
