@@ -25,6 +25,11 @@ import ShinyText from "@/components/ShinyText.jsx";
 import GradientText from "@/components/GradientText.jsx";
 import StarBorder from "@/components/StarBorder.jsx";
 import SpotlightCard from "@/components/SpotlightCard.jsx";
+import CountUp from "@/components/CountUp.jsx";
+import DecryptedText from "@/components/DecryptedText.jsx";
+import GlareHover from "@/components/GlareHover.jsx";
+import Magnet from "@/components/Magnet.jsx";
+import Particles from "@/components/Particles.jsx";
 
 // ---------------------------------------------------------------------------
 // reCAPTCHA v3 config
@@ -1067,11 +1072,13 @@ function Badge({ tone = "blue", children, className = "" }) {
 
 function SectionHead({ kicker, title, desc, center }) {
   return (
-    <div className={"max-w-2xl sect-rule " + (center ? "mx-auto text-center" : "")}>
-      {kicker && <div className="mono text-xs text-zinc-500 uppercase mb-2">{kicker}</div>}
-      <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">{title}</h2>
-      {desc && <p className="mt-3 text-zinc-400 leading-relaxed">{desc}</p>}
-    </div>
+    <AnimatedContent distance={44} duration={0.7} ease="power3.out" threshold={0.2}>
+      <div className={"max-w-2xl sect-rule " + (center ? "mx-auto text-center" : "")}>
+        {kicker && <div className="mono text-xs text-zinc-500 uppercase mb-2">{kicker}</div>}
+        <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">{title}</h2>
+        {desc && <p className="mt-3 text-zinc-400 leading-relaxed">{desc}</p>}
+      </div>
+    </AnimatedContent>
   );
 }
 
@@ -2178,6 +2185,7 @@ function scrollToId(id) {
 
 function PublicNav({ route, go, onAuth }) {
   const [open, setOpen] = useState(false);
+  const reducedMotion = usePrefersReducedMotion();
   const link = "text-sm font-semibold text-slate-600 hover:text-violet-700 transition px-1 py-2";
   const items = (
     <>
@@ -2193,7 +2201,9 @@ function PublicNav({ route, go, onAuth }) {
         <nav className="hidden md:flex items-center gap-6">{items}</nav>
         <div className="hidden md:flex items-center gap-2.5">
           <Btn variant="ghost" onClick={() => onAuth("login")}>Log in</Btn>
-          <Btn onClick={() => onAuth("signup")}>Sign Up Free <ArrowRight size={15} /></Btn>
+          <Magnet padding={40} magnetStrength={4} disabled={reducedMotion}>
+            <Btn onClick={() => onAuth("signup")}>Sign Up Free <ArrowRight size={15} /></Btn>
+          </Magnet>
         </div>
         <button className="md:hidden p-2 rounded-lg hover:bg-gray-100" onClick={() => setOpen(!open)} aria-label="Menu">
           {open ? <X size={20} /> : <Menu size={20} />}
@@ -2265,6 +2275,7 @@ function FooterBig({ go, onAuth }) {
   const socials = SOCIAL_LINKS.filter((s) => s.url);
   return (
     <footer className="bg-slate-900 text-slate-300 mt-0">
+      <AnimatedContent distance={40} duration={0.7} ease="power3.out" threshold={0.08}>
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-14 grid gap-10 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo light />
@@ -2335,6 +2346,7 @@ function FooterBig({ go, onAuth }) {
           {emailErr && <div className="text-xs mt-2 font-semibold" style={{ color: "var(--danger)" }} role="alert">{emailErr}</div>}
         </div>
       </div>
+      </AnimatedContent>
       <div className="border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <span>© 2026 GenCopilot, Inc. All rights reserved.</span>
@@ -2409,7 +2421,17 @@ function Landing({ go, onAuth }) {
           <div>
             <div className="mono text-[11px] uppercase text-zinc-500 mb-5 flex items-center gap-2">
               <Sparkles size={12} className="mo-char" style={{ animationDelay: "0ms" }} />
-              <MoChars text="New · AI-native startup operating system" delay={120} step={18} />
+              {reducedMotion ? (
+                <MoChars text="New · AI-native startup operating system" delay={120} step={18} />
+              ) : (
+                <DecryptedText
+                  text="New · AI-native startup operating system"
+                  animateOn="view"
+                  sequential
+                  speed={22}
+                  encryptedClassName="opacity-50"
+                />
+              )}
             </div>
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
               {reducedMotion ? (
@@ -2446,12 +2468,16 @@ function Landing({ go, onAuth }) {
               <MoLine delay={860}>replace the tab chaos with one clear cockpit.</MoLine>
             </p>
             <div className="mt-8 flex flex-wrap gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 950ms both" }}>
-              <MoBtn inverted className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>
-                Sign Up Free <ArrowRight size={17} />
-              </MoBtn>
-              <MoBtn variant="ghost" className="px-6 py-3 text-base" onClick={() => scrollToId("features")}>
-                Explore Features
-              </MoBtn>
+              <Magnet padding={60} magnetStrength={3} disabled={reducedMotion}>
+                <MoBtn inverted className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>
+                  Sign Up Free <ArrowRight size={17} />
+                </MoBtn>
+              </Magnet>
+              <Magnet padding={60} magnetStrength={3} disabled={reducedMotion}>
+                <MoBtn variant="ghost" className="px-6 py-3 text-base" onClick={() => scrollToId("features")}>
+                  Explore Features
+                </MoBtn>
+              </Magnet>
             </div>
             <div className="mt-8 flex items-center gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1080ms both" }}>
               {/* The overlap idiom relied on rounded-full + a white ring to
@@ -2474,7 +2500,7 @@ function Landing({ go, onAuth }) {
                 ))}
               </div>
               <span className="text-sm text-zinc-400">
-                <span className="font-bold text-zinc-200"><MoTick to={2300} suffix="+" /> founders</span> run their startup here
+                <span className="font-bold text-zinc-200"><CountUp to={2300} duration={2.2} separator="," />+ founders</span> run their startup here
               </span>
             </div>
           </div>
@@ -2572,7 +2598,8 @@ function Landing({ go, onAuth }) {
         />
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {MODULES.map((m, i) => (
-            <div key={m.id} className="flip h-44 anim-fadeUp" style={{ animationDelay: i * 60 + "ms" }}>
+            <AnimatedContent key={m.id} distance={44} duration={0.55} ease="power3.out" threshold={0.12} delay={(i % 5) * 0.07}>
+            <div className="flip h-44">
               <div className="flip-inner">
                 <div className="flip-face bg-white/5 border border-white/6 backdrop-blur-sm p-4 flex flex-col justify-between">
                   <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-400 flex items-center justify-center"><m.icon size={19} /></div>
@@ -2587,6 +2614,7 @@ function Landing({ go, onAuth }) {
                 </button>
               </div>
             </div>
+            </AnimatedContent>
           ))}
         </div>
       </section>
@@ -2604,6 +2632,21 @@ function Landing({ go, onAuth }) {
         <div className="absolute inset-0 mo-halftone pointer-events-none" aria-hidden="true">
           <HalftoneField gap={26} />
         </div>
+        {/* drifting particle field in brand tones behind the numerals */}
+        {!reducedMotion && (
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+            <Particles
+              className="w-full h-full"
+              particleCount={160}
+              particleSpread={12}
+              speed={0.08}
+              particleColors={["#a78bfa", "#e879f9", "#f5f3ff"]}
+              particleBaseSize={60}
+              sizeRandomness={1}
+              alphaParticles
+            />
+          </div>
+        )}
         <div className="max-w-7xl mx-auto px-4 md:px-6 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center relative">
           {[
             [10, "", 0, "modules, one login"],
@@ -2611,13 +2654,15 @@ function Landing({ go, onAuth }) {
             [3.4, "×", 1, "faster weekly reporting"],
             [24, "/7", 0, "AI copilot on your data"],
           ].map(([n, suffix, decimals, l], i) => (
-            <div key={l}>
+            <AnimatedContent key={l} distance={36} duration={0.6} ease="power3.out" threshold={0.2} delay={i * 0.09}>
+            <div>
               <div className="text-4xl font-extrabold text-violet-400 mo-tick">
                 <ScrubCounter to={n} suffix={suffix} decimals={decimals} />
               </div>
               <div className="mo-rule mx-auto mt-3 mb-2" style={{ width: 34, animationDelay: i * 90 + "ms" }} />
               <div className="text-sm text-zinc-500 font-medium">{l}</div>
             </div>
+            </AnimatedContent>
           ))}
         </div>
       </section>
@@ -2645,8 +2690,12 @@ function Landing({ go, onAuth }) {
               Free for early-stage teams. Set up in minutes — your dashboard is one signup away.
             </p>
             <div className="mt-7 flex justify-center gap-3 flex-wrap">
-              <MoBtn variant="dark" inverted className="bg-white text-violet-700 hover:bg-violet-50 px-6 py-3 text-base" onClick={() => onAuth("signup")}>Create free account</MoBtn>
-              <MoBtn variant="dark" className="bg-black/30 hover:bg-black/45 px-6 py-3 text-base" onClick={() => go("contact")}>Talk to us</MoBtn>
+              <Magnet padding={60} magnetStrength={3} disabled={reducedMotion}>
+                <MoBtn variant="dark" inverted className="bg-white text-violet-700 hover:bg-violet-50 px-6 py-3 text-base" onClick={() => onAuth("signup")}>Create free account</MoBtn>
+              </Magnet>
+              <Magnet padding={60} magnetStrength={3} disabled={reducedMotion}>
+                <MoBtn variant="dark" className="bg-black/30 hover:bg-black/45 px-6 py-3 text-base" onClick={() => go("contact")}>Talk to us</MoBtn>
+              </Magnet>
             </div>
           </div>
         </div>
@@ -2722,21 +2771,26 @@ function Carousel() {
 
 // ----------------------------------------------------------- public: about -
 function About({ onAuth }) {
+  const reducedMotion = usePrefersReducedMotion();
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-16">
       <SectionHead center kicker="About us" title="We build calm for chaotic companies" desc="GenCopilot exists because early-stage teams deserve enterprise-grade clarity without an enterprise-grade ops team." />
 
       <div className="mt-12 grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <AnimatedContent distance={44} duration={0.65} ease="power3.out" threshold={0.15}>
         <Card className="p-7 hover:shadow-md transition-shadow">
           <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-4"><Target size={20} /></div>
           <h3 className="text-lg font-extrabold text-slate-900">Our mission</h3>
           <p className="mt-2 text-sm text-slate-500 leading-relaxed">Give every founder a real-time, intelligent picture of their startup — demand, customers, cash, and obligations — so decisions are made on evidence, not vibes.</p>
         </Card>
+        </AnimatedContent>
+        <AnimatedContent distance={44} duration={0.65} ease="power3.out" threshold={0.15} delay={0.1}>
         <Card className="p-7 hover:shadow-md transition-shadow">
           <div className="w-11 h-11 rounded-xl bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center mb-4"><Eye size={20} /></div>
           <h3 className="text-lg font-extrabold text-slate-900">Our vision</h3>
           <p className="mt-2 text-sm text-slate-500 leading-relaxed">A world where no startup dies of preventable causes: unseen churn, silent burn, missed filings, or effort spent on the wrong leads.</p>
         </Card>
+        </AnimatedContent>
       </div>
 
       {/* Animated timeline */}
@@ -2744,12 +2798,14 @@ function About({ onAuth }) {
         <h3 className="text-2xl font-extrabold text-slate-900 text-center mb-10">How we got here</h3>
         <div className="relative border-l-2 border-violet-100 ml-3">
           {TIMELINE.map((t, i) => (
-            <div key={t.year} className="relative pl-8 pb-10 anim-fadeUp" style={{ animationDelay: i * 140 + "ms" }}>
+            <AnimatedContent key={t.year} direction="horizontal" reverse distance={48} duration={0.6} ease="power3.out" threshold={0.15} delay={i * 0.08}>
+            <div className="relative pl-8 pb-10">
               <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-4 border-violet-600" />
               <div className="text-xs font-bold uppercase tracking-widest text-fuchsia-600">{t.year}</div>
               <div className="text-base font-extrabold text-slate-900 mt-1">{t.title}</div>
               <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{t.desc}</p>
             </div>
+            </AnimatedContent>
           ))}
         </div>
       </div>
@@ -2759,18 +2815,24 @@ function About({ onAuth }) {
         <h3 className="text-2xl font-extrabold text-slate-900 text-center mb-10">The crew</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {TEAM.map((p, i) => (
-            <Card key={p.name} className="p-6 text-center hover:-translate-y-1.5 hover:shadow-lg transition-all duration-300 anim-fadeUp" style={{ animationDelay: i * 90 + "ms" }}>
-              <div className={"w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-white text-lg font-extrabold shadow-md " + p.color}>{p.initials}</div>
-              <div className="mt-4 font-extrabold text-slate-900">{p.name}</div>
-              <div className="text-xs font-bold text-violet-600 uppercase tracking-wide mt-0.5">{p.role}</div>
-              <p className="text-xs text-slate-500 mt-3 leading-relaxed">{p.tag}</p>
+            <AnimatedContent key={p.name} distance={40} duration={0.55} ease="power3.out" threshold={0.15} delay={i * 0.08}>
+            <Card className="text-center hover:-translate-y-1.5 hover:shadow-lg transition-all duration-300 overflow-hidden">
+              <GlareHover width="100%" height="auto" background="transparent" borderRadius="1rem" borderColor="transparent" glareOpacity={0.28} glareAngle={-35} glareSize={220} transitionDuration={750} className="p-6">
+                <div className={"w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-white text-lg font-extrabold shadow-md " + p.color}>{p.initials}</div>
+                <div className="mt-4 font-extrabold text-slate-900">{p.name}</div>
+                <div className="text-xs font-bold text-violet-600 uppercase tracking-wide mt-0.5">{p.role}</div>
+                <p className="text-xs text-slate-500 mt-3 leading-relaxed">{p.tag}</p>
+              </GlareHover>
             </Card>
+            </AnimatedContent>
           ))}
         </div>
       </div>
 
       <div className="mt-16 text-center">
-        <Btn className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>Join 2,300+ founders <ArrowRight size={16} /></Btn>
+        <Magnet padding={60} magnetStrength={3} disabled={reducedMotion}>
+          <Btn className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>Join 2,300+ founders <ArrowRight size={16} /></Btn>
+        </Magnet>
       </div>
     </div>
   );
