@@ -30,6 +30,9 @@ import DecryptedText from "@/components/DecryptedText.jsx";
 import GlareHover from "@/components/GlareHover.jsx";
 import Magnet from "@/components/Magnet.jsx";
 import Particles from "@/components/Particles.jsx";
+import LightRays from "@/components/LightRays.jsx";
+import Waves from "@/components/Waves.jsx";
+import DotGrid from "@/components/DotGrid.jsx";
 
 // ---------------------------------------------------------------------------
 // reCAPTCHA v3 config
@@ -2773,7 +2776,21 @@ function Carousel() {
 function About({ onAuth }) {
   const reducedMotion = usePrefersReducedMotion();
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-16">
+    <div className="relative max-w-7xl mx-auto px-4 md:px-6 py-16">
+      {/* cursor-reactive wave field behind the header, fading downward */}
+      {!reducedMotion && (
+        <div
+          className="absolute inset-x-0 top-0 h-80 z-0 pointer-events-none overflow-hidden"
+          aria-hidden="true"
+          style={{
+            maskImage: "linear-gradient(to bottom, black 35%, transparent)",
+            WebkitMaskImage: "linear-gradient(to bottom, black 35%, transparent)",
+          }}
+        >
+          <Waves lineColor="rgba(124, 58, 237, 0.16)" xGap={14} yGap={36} waveAmpX={26} waveAmpY={13} className="w-full h-full" />
+        </div>
+      )}
+      <div className="relative z-10">
       <SectionHead center kicker="About us" title="We build calm for chaotic companies" desc="GenCopilot exists because early-stage teams deserve enterprise-grade clarity without an enterprise-grade ops team." />
 
       <div className="mt-12 grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
@@ -2834,12 +2851,14 @@ function About({ onAuth }) {
           <Btn className="px-6 py-3 text-base" onClick={() => onAuth("signup")}>Join 2,300+ founders <ArrowRight size={16} /></Btn>
         </Magnet>
       </div>
+      </div>
     </div>
   );
 }
 
 // --------------------------------------------------------- public: contact -
 function Contact() {
+  const reducedMotion = usePrefersReducedMotion();
   const [f, setF] = useState({ name: "", email: "", msg: "" });
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
@@ -2853,7 +2872,14 @@ function Contact() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-16">
+    <div className="relative max-w-7xl mx-auto px-4 md:px-6 py-16">
+      {/* interactive dot field — dots scatter away from fast cursor moves */}
+      {!reducedMotion && (
+        <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
+          <DotGrid dotSize={5} gap={26} baseColor="#ede9fe" activeColor="#8b5cf6" proximity={130} shockRadius={220} shockStrength={4} className="w-full h-full" />
+        </div>
+      )}
+      <div className="relative z-10">
       <SectionHead center kicker="Contact" title="Talk to a human (we have several)" desc="Questions, partnerships, or a demo for your team — we reply within one business day." />
       <div className="mt-12 grid lg:grid-cols-2 gap-6 items-start">
         <AnimatedContent distance={48} duration={0.7} ease="power3.out" threshold={0.15}>
@@ -2917,14 +2943,17 @@ function Contact() {
             <div className="flex items-center gap-3 text-sm"><span className="w-9 h-9 rounded-xl bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center"><Phone size={16} /></span><span className="font-semibold text-slate-700">+91 11 4100 0000 · Mon–Fri, 10:00–18:00 IST</span></div>
             <div className="pt-2 border-t border-gray-100 flex gap-2.5">
               {socials.map((Icon, i) => (
-                <button key={i} className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-slate-500 hover:bg-violet-600 hover:text-white hover:border-violet-600 hover:-translate-y-1 transition-all duration-200" aria-label="Social">
-                  <Icon size={17} />
-                </button>
+                <Magnet key={i} padding={28} magnetStrength={4} disabled={reducedMotion}>
+                  <button className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-slate-500 hover:bg-violet-600 hover:text-white hover:border-violet-600 hover:-translate-y-1 transition-all duration-200" aria-label="Social">
+                    <Icon size={17} />
+                  </button>
+                </Magnet>
               ))}
             </div>
           </Card>
         </div>
         </AnimatedContent>
+      </div>
       </div>
     </div>
   );
@@ -2932,6 +2961,7 @@ function Contact() {
 
 // ------------------------------------------------------------ public: auth -
 function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
+  const reducedMotion = usePrefersReducedMotion();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -3004,6 +3034,12 @@ function AuthPage({ mode, setMode, onLogin, onGuest, goHome }) {
     <div className="min-h-screen grid lg:grid-cols-2 bg-gray-100">
       {/* Left brand panel */}
       <div className="hidden lg:flex relative overflow-hidden bg-slate-900 text-white flex-col justify-between p-12">
+        {/* volumetric light rays pouring from the top in brand violet */}
+        {!reducedMotion && (
+          <div className="absolute inset-0 pointer-events-none opacity-90" aria-hidden="true">
+            <LightRays raysOrigin="top-center" raysColor="#a78bfa" raysSpeed={1.2} lightSpread={1.3} rayLength={2.4} saturation={1.2} followMouse mouseInfluence={0.08} className="w-full h-full" />
+          </div>
+        )}
         <div className="blob bg-[#007cf0] w-96 h-96 -top-20 -left-20" style={{ animation: "floatY 10s ease-in-out infinite" }} />
         <div className="blob bg-[#ff0080] w-72 h-72 bottom-10 right-0" style={{ animation: "floatY2 12s ease-in-out infinite" }} />
         <div className="blob bg-[#50e3c2] w-64 h-64 top-1/3 right-1/4" style={{ animation: "floatY 14s ease-in-out infinite" }} />
@@ -8383,16 +8419,52 @@ export default function App() {
   // The Copilot module embeds its own full-width chat, so the dock stands down there.
   const showJarvis = route === "app" && user && !needsOnboarding && active !== "copilot";
 
-  // Loading screen while Firebase initializes
-  if (authLoading) {
+  // Animated loading screen while Firebase initializes.
+  // `?splash` forces it on so the screen can be previewed/demoed directly.
+  if (authLoading || new URLSearchParams(window.location.search).has("splash")) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#ffffff", fontFamily: "'Playfair Display', Georgia, serif", gap: 16 }}>
-        <div style={{ width: 48, height: 48, borderRadius: 0, background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+      <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden bg-white" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+        <style>{`
+          @keyframes lsSpin { to { transform: rotate(360deg); } }
+          @keyframes lsFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+          @keyframes lsSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+          @keyframes lsBreathe { 0%,100% { opacity: .35; transform: scale(1); } 50% { opacity: .6; transform: scale(1.12); } }
+          @keyframes lsDot { 0%,80%,100% { transform: scale(.6); opacity: .3; } 40% { transform: scale(1); opacity: 1; } }
+          @media (prefers-reduced-motion: reduce) {
+            .ls-anim, .ls-anim * { animation: none !important; }
+          }
+        `}</style>
+        <div className="ls-anim relative flex flex-col items-center gap-5">
+          {/* soft aurora blobs breathing behind the mark */}
+          <div aria-hidden="true" className="absolute -top-40 -left-48 w-96 h-96 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(124,58,237,.28), transparent 65%)", filter: "blur(30px)", animation: "lsBreathe 3.6s ease-in-out infinite" }} />
+          <div aria-hidden="true" className="absolute -bottom-40 -right-48 w-96 h-96 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(217,70,239,.24), transparent 65%)", filter: "blur(30px)", animation: "lsBreathe 3.6s ease-in-out infinite 1.4s" }} />
+
+          {/* logo mark inside an orbiting conic ring */}
+          <div className="relative" style={{ width: 92, height: 92, animation: "lsFloat 3.2s ease-in-out infinite" }}>
+            <div aria-hidden="true" className="absolute inset-0 rounded-full" style={{ background: "conic-gradient(from 0deg, transparent 0 70%, #7c3aed 82%, #d946ef 92%, transparent 100%)", animation: "lsSpin 1.4s linear infinite", WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), black calc(100% - 3px))", mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), black calc(100% - 3px))" }} />
+            <div className="absolute inset-0 m-auto flex items-center justify-center" style={{ width: 52, height: 52, background: "#0a0a0a" }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+            </div>
+          </div>
+
+          {/* wordmark with a slow shimmer */}
+          <div className="relative text-2xl font-bold tracking-tight" style={{ letterSpacing: "-0.01em" }}>
+            <ShinyText text="GenCopilot" speed={2.4} color="#0a0a0a" shineColor="#8b5cf6" spread={100} />
+          </div>
+
+          {/* indeterminate gradient sweep bar */}
+          <div className="relative w-48 h-1 overflow-hidden rounded-full bg-gray-200/80" aria-hidden="true">
+            <div className="absolute inset-y-0 w-2/5 rounded-full" style={{ background: "linear-gradient(90deg, #7c3aed, #d946ef)", animation: "lsSweep 1.15s cubic-bezier(.4,0,.2,1) infinite" }} />
+          </div>
+
+          {/* status line with pulsing dots */}
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500" role="status" aria-live="polite">
+            Warming up your cockpit
+            {[0, 1, 2].map((d) => (
+              <span key={d} aria-hidden="true" className="w-1 h-1 rounded-full bg-violet-500 inline-block" style={{ animation: `lsDot 1.2s ease-in-out ${d * 0.18}s infinite` }} />
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#0a0a0a", letterSpacing: "-0.01em" }}>GenCopilot</div>
-        <div style={{ width: 18, height: 18, border: "2px solid #e5e5e5", borderTopColor: "#0a0a0a", borderRadius: 0, animation: "spin 0.8s linear infinite" }}></div>
-        <style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style>
       </div>
     );
   }
