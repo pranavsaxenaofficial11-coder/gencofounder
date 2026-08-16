@@ -115,7 +115,7 @@ service cloud.firestore {
     // --- Invite codes -------------------------------------
     // Readable by any signed-in user, because someone joining a workspace has
     // no access to it yet and this is how they resolve a code to a workspace.
-    // It holds no secrets — only the id and name of the workspace the code
+    // It holds no secrets: only the id and name of the workspace the code
     // opens, and possession of the code is the thing being checked.
     match /org_invites/{code} {
       allow read: if signedIn();
