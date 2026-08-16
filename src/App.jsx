@@ -14,6 +14,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   SpecimenPlate, OpposingMarquee, HalftoneField,
   ScrubWipe, PinnedSteps, ScrubCounter, useScrollTriggerRefresh,
+  prefersReduced,
 } from "./graphics.jsx";
 
 // ---------------------------------------------------------------------------
@@ -807,6 +808,21 @@ html, body { max-width:100%; overflow-x:hidden; }
 /* halftone canvas inherits ink so it flips with the plate */
 .lp-root .mo-halftone{color:var(--fg);opacity:.55}
 
+/* ---------- public copilot: launcher + floating panel -------------------- */
+/* Obeys the three laws — square, hairline ink border, no shadow, no glass. */
+.lp-root .pc-launcher{
+  background:var(--bg);border:1px solid var(--fg);color:var(--fg);
+}
+.lp-root .pc-launcher:hover{background:var(--fg);color:var(--bg)}
+/* The orb draws light dots on transparency, so its well stays ink-black in
+   BOTH themes. Following --bg would erase it the moment the plate inverts. */
+.lp-root .pc-launcher-orb{
+  display:block;width:30px;height:30px;background:#0a0a0a;flex:none;
+}
+.lp-root .pc-panel{
+  background:#0a0a0a;border:1px solid var(--fg);
+}
+
 /* ---------- respect the user ------------------------------------------- */
 @media (prefers-reduced-motion: reduce){
   .lp-root .mo-marquee-field{transform:none!important}
@@ -830,6 +846,134 @@ html, body { max-width:100%; overflow-x:hidden; }
   .lp-root button.mo-magnet{transition:none!important}
   .lp-root .mo-draw .recharts-area-curve,
   .lp-root .mo-draw .recharts-line-curve{stroke-dashoffset:0!important}
+}
+
+/* ==========================================================================
+   POP + CELEBRATION — interaction layer (wins by source order)
+   The editorial system disarms interaction motion on purpose: it kills every
+   button transition (.lp-root button{transition:none}) and flattens Tailwind's
+   active:scale-95. This layer re-arms it deliberately, on named classes only,
+   so anything that did not opt in still obeys the three laws.
+   The one sanctioned exception to "no colour" is the party popper itself,
+   whose palette lives in POPPER_COLORS in the JS below.
+   ========================================================================== */
+
+/* ---------- the pop: press it and it answers ----------------------------- */
+.lp-root button.btn-pop{
+  transition:transform .34s cubic-bezier(.34,1.56,.64,1),
+             background-color .2s ease,
+             border-color .2s ease,
+             color .2s ease!important;
+  will-change:transform;
+}
+.lp-root button.btn-pop:hover:not(:disabled){transform:translateY(-2px) scale(1.035)}
+/* Two selectors, one job. The editorial layer's
+   .lp-root .active\\:scale-95:active{transform:none!important} is (0,3,0) and
+   already !important, so an equal-weight rule loses on source order alone.
+   Repeating .btn-pop takes this to (0,3,1) and wins outright. */
+.lp-root button.btn-pop.btn-pop:active:not(:disabled),
+.lp-root button.btn-pop.active\\:scale-95:active:not(:disabled){
+  transform:translateY(0) scale(.93)!important;
+  transition-duration:.09s!important;
+}
+/* A disabled CTA looked identical to a live one until you clicked it. */
+.lp-root button.btn-pop:disabled{opacity:.45;transform:none!important}
+
+/* ---------- overlay: confetti, ripples, toasts ---------------------------
+   Mounted on <body>, deliberately outside .lp-root — React owns that subtree,
+   and appending stray nodes to a container React is reconciling is how you
+   earn a removeChild crash. moOverlay() copies the tokens across instead, so
+   the ripple and toast still paint in the current theme. */
+.mo-overlay{
+  position:fixed;inset:0;overflow:hidden;pointer-events:none;
+  z-index:2147483000;
+}
+.mo-overlay .mo-confetti{position:absolute;inset:0}
+
+/* press ripple: a hairline square that opens and turns */
+.mo-overlay .mo-pulse{
+  position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;
+  border:1px solid var(--fg,#0a0a0a);
+  animation:moPulse .5s cubic-bezier(.16,1,.3,1) forwards;
+}
+@keyframes moPulse{
+  from{transform:scale(.35) rotate(0deg);opacity:.6}
+  to{transform:scale(5.5) rotate(45deg);opacity:0}
+}
+
+/* logged-it toast: mono specimen on an ink plate */
+.mo-overlay .mo-toast-rail{
+  position:absolute;left:50%;bottom:28px;transform:translateX(-50%);
+  display:flex;flex-direction:column-reverse;gap:8px;align-items:center;
+  padding:0 16px;max-width:100vw;
+}
+.mo-overlay .mo-toast{
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+  background:var(--fg,#0a0a0a);color:var(--bg,#ffffff);
+  border:1px solid var(--fg,#0a0a0a);
+  padding:10px 16px;display:inline-flex;align-items:center;gap:10px;
+  max-width:calc(100vw - 32px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  animation:moToastIn .42s cubic-bezier(.16,1,.3,1) both;
+}
+.mo-overlay .mo-toast::before{content:"✳";opacity:.7}
+.mo-overlay .mo-toast-out{animation:moToastOut .4s cubic-bezier(.7,0,.84,0) both}
+@keyframes moToastIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes moToastOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(10px) scale(.98)}}
+
+/* ---------- cards lift toward the cursor, hairline goes to ink ----------- */
+.lp-root .card-lift{transition:transform .4s cubic-bezier(.16,1,.3,1),border-color .3s ease}
+.lp-root .card-lift:hover{transform:translateY(-2px);border-color:var(--border-2)!important}
+/* Only lucide glyphs pop. A bare svg selector would catch Recharts' own
+   chart surface and rescale the whole figure on card hover. */
+.lp-root .stat-pop svg.lucide{transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+.lp-root .card-lift:hover .stat-pop svg.lucide{transform:scale(1.14) rotate(-4deg)}
+
+/* ---------- a module arrives, it does not just appear --------------------
+   Children only. Putting the animation on .mo-page itself would give the
+   container a transform, and a transform is a containing block for any
+   position:fixed descendant that opens during the half-second it runs. */
+.lp-root .mo-page > *{animation:moPageIn .55s cubic-bezier(.16,1,.3,1) both}
+@keyframes moPageIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.lp-root .mo-page > *:nth-child(1){animation-delay:.03s}
+.lp-root .mo-page > *:nth-child(2){animation-delay:.08s}
+.lp-root .mo-page > *:nth-child(3){animation-delay:.13s}
+.lp-root .mo-page > *:nth-child(4){animation-delay:.18s}
+.lp-root .mo-page > *:nth-child(5){animation-delay:.23s}
+.lp-root .mo-page > *:nth-child(6){animation-delay:.28s}
+.lp-root .mo-page > *:nth-child(n+7){animation-delay:.32s}
+
+/* ---------- badges snap in ----------------------------------------------- */
+.lp-root .mo-badge{animation:moBadgeIn .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes moBadgeIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+
+/* ---------- sidebar: rows lean in, the active rule draws itself ---------- */
+.lp-root .lp-sidebar nav button{
+  transition:transform .28s cubic-bezier(.16,1,.3,1),
+             background-color .2s ease,color .2s ease!important;
+}
+.lp-root .lp-sidebar nav button:hover{transform:translateX(3px)}
+.lp-root .lp-nav-active{position:relative}
+.lp-root .lp-nav-active::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--fg);
+  animation:moNavBar .38s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes moNavBar{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+/* ---------- respect the user (again, for everything above) --------------- */
+@media (prefers-reduced-motion: reduce){
+  .lp-root button.btn-pop,.lp-root .card-lift,
+  .lp-root .lp-sidebar nav button{transition:none!important}
+  .lp-root button.btn-pop:hover:not(:disabled),
+  .lp-root button.btn-pop.btn-pop:active:not(:disabled),
+  .lp-root button.btn-pop.active\\:scale-95:active:not(:disabled),
+  .lp-root .card-lift:hover,
+  .lp-root .lp-sidebar nav button:hover,
+  .lp-root .card-lift:hover .stat-pop svg.lucide{transform:none!important}
+  .mo-overlay .mo-pulse,.mo-overlay .mo-confetti{display:none!important}
+  .lp-root .mo-page > *,.lp-root .mo-badge,
+  .lp-root .lp-nav-active::before{animation:none!important}
+  .mo-overlay .mo-toast{animation:none!important;opacity:1!important;transform:none!important}
 }
 `;
 
@@ -955,7 +1099,12 @@ function useUserCollection(user, coll) {
   }, [user?.uid, coll]);
   const add = async (item) => {
     if (!user?.uid) return alert("You're not signed in with a cloud account — log in to save data.");
-    try { const fb = await import("./firebase.js"); await fb.addItem(user.uid, coll, item); } catch (e) { alert("Save failed: " + (e?.message || e)); }
+    try {
+      const fb = await import("./firebase.js");
+      await fb.addItem(user.uid, coll, item);
+      // Only after the write lands — a popper for a save that failed is a lie.
+      celebrate(LOG_LABELS[coll] || "Logged");
+    } catch (e) { alert("Save failed: " + (e?.message || e)); }
   };
   const update = async (id, data) => {
     try { const fb = await import("./firebase.js"); if (user?.uid) await fb.updateItem(user.uid, coll, id, data); } catch (e) { alert("Update failed: " + (e?.message || e)); }
@@ -1013,15 +1162,253 @@ const CANNED = {
 };
 
 // ------------------------------------------------------------ primitives ---
+/* ------------------------------------------------ celebration + pop kit ---
+   Two ideas in one place:
+     · inkPulse — every press opens a hairline square where the founder
+       clicked, so a button answers physically instead of only changing colour.
+     · partyPopper — the confetti burst that goes off the moment something
+       real gets logged: feedback, an automation, a meeting, a touch.
+
+   The burst is the one place on the surface that deliberately breaks the
+   no-colour law: it carries a fixed festive palette rather than the theme's
+   ink ramp, because a party popper that comes out grey is not a party popper.
+   Everything around it — the ripple, the toast, the shockwave — still reads
+   the theme tokens, so the celebration lands on an editorial surface rather
+   than replacing it.
+
+   Both effects no-op under prefers-reduced-motion; the toast still speaks,
+   because the confirmation is the point and only the movement is decoration. */
+
+const reduceMotion = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// An actual party popper, not a tasteful one.
+const POPPER_COLORS = ["#ff0080", "#00dfd8", "#f9cb28", "#7928ca", "#ff4d4d"];
+
+// Where the last press landed. A celebration fired from an async save has no
+// event left to read, but it still knows which button the founder pressed.
+let LAST_PRESS = null;
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    "pointerdown",
+    (e) => { LAST_PRESS = { x: e.clientX, y: e.clientY }; },
+    { capture: true, passive: true }
+  );
+}
+
+function pressPoint(src) {
+  if (src && typeof src.clientX === "number" && (src.clientX || src.clientY)) {
+    return { x: src.clientX, y: src.clientY };
+  }
+  // Keyboard activation reports 0,0 — fall back to the control's own box.
+  const el = src && (src.currentTarget || (src.getBoundingClientRect ? src : null));
+  if (el && el.getBoundingClientRect) {
+    const r = el.getBoundingClientRect();
+    if (r.width || r.height) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  return LAST_PRESS || { x: window.innerWidth / 2, y: window.innerHeight * 0.42 };
+}
+
+const MO_TOKENS = ["--fg", "--bg", "--mono"];
+
+// One overlay for every effect, mounted on <body> so React never has to
+// reconcile around it. Tokens are copied in on each use, which also keeps the
+// ripple and toast correct after a light/dark switch.
+function moOverlay() {
+  let host = document.querySelector("body > .mo-overlay");
+  if (!host) {
+    host = document.createElement("div");
+    host.className = "mo-overlay";
+    document.body.appendChild(host);
+  }
+  const root = document.querySelector(".lp-root");
+  if (root) {
+    const cs = getComputedStyle(root);
+    for (const k of MO_TOKENS) {
+      const val = (cs.getPropertyValue(k) || "").trim();
+      if (val) host.style.setProperty(k, val);
+    }
+  }
+  return host;
+}
+
+function inkColor(host) {
+  const v = (getComputedStyle(host).getPropertyValue("--fg") || "").trim();
+  return v || "#0a0a0a";
+}
+
+let CONFETTI = null;
+
+function sizeConfetti() {
+  if (!CONFETTI || !CONFETTI.canvas.isConnected) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const { canvas, ctx } = CONFETTI;
+  canvas.width = Math.floor(window.innerWidth * dpr);
+  canvas.height = Math.floor(window.innerHeight * dpr);
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function confettiLayer(host) {
+  if (CONFETTI && CONFETTI.canvas.isConnected) return CONFETTI;
+  const canvas = document.createElement("canvas");
+  canvas.className = "mo-confetti";
+  canvas.setAttribute("aria-hidden", "true");
+  host.appendChild(canvas);
+  CONFETTI = { canvas, ctx: canvas.getContext("2d"), pieces: [], raf: 0 };
+  sizeConfetti();
+  window.addEventListener("resize", sizeConfetti, { passive: true });
+  return CONFETTI;
+}
+
+// The loop runs only while there is something to draw, then parks itself.
+function runConfetti() {
+  const L = CONFETTI;
+  if (!L || L.raf) return;
+  const tick = () => {
+    const { ctx, pieces } = L;
+    const W = window.innerWidth, H = window.innerHeight;
+    ctx.clearRect(0, 0, W, H);
+    for (let i = pieces.length - 1; i >= 0; i--) {
+      const p = pieces[i];
+      p.life++;
+      const t = p.life / p.ttl;
+      if (p.ring) {
+        // the pop itself: one hairline shockwave. This one stays ink — it is
+        // the report, not the confetti, and it grounds the burst on the page.
+        const r = 6 + t * 78;
+        ctx.save();
+        ctx.globalAlpha = (1 - t) * 0.5;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(p.x - r, p.y - r, r * 2, r * 2);
+        ctx.restore();
+        if (p.life >= p.ttl) pieces.splice(i, 1);
+        continue;
+      }
+      p.vy += 0.26;   // gravity
+      p.vx *= 0.985;  // air
+      p.vy *= 0.985;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      p.flip += p.vf;
+      ctx.save();
+      ctx.globalAlpha = t > 0.72 ? Math.max(0, (1 - t) / 0.28) : 1;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.scale(1, Math.cos(p.flip)); // tumbles edge-on and back
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+      if (p.life >= p.ttl || p.y > H + 48) pieces.splice(i, 1);
+    }
+    L.raf = pieces.length ? requestAnimationFrame(tick) : 0;
+    if (!L.raf) ctx.clearRect(0, 0, W, H);
+  };
+  L.raf = requestAnimationFrame(tick);
+}
+
+// A popper fires up and out in a cone. An even circle reads as a generic
+// success splash; the cone reads as something going off in your hand.
+function partyPopper(src, opts = {}) {
+  if (typeof window === "undefined" || reduceMotion()) return;
+  const { x, y } = pressPoint(src);
+  const host = moOverlay();
+  const L = confettiLayer(host);
+  const count = opts.count ?? 78;
+  const spread = ((opts.spread ?? 96) * Math.PI) / 180;
+  for (let i = 0; i < count; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * spread;
+    const speed = 5.5 + Math.random() * 9.5;
+    const streamer = Math.random() < 0.22;
+    L.pieces.push({
+      x, y,
+      vx: Math.cos(a) * speed + (Math.random() - 0.5) * 1.6,
+      vy: Math.sin(a) * speed,
+      w: streamer ? 1.5 : 3 + Math.random() * 5,
+      h: streamer ? 16 + Math.random() * 14 : 6 + Math.random() * 10,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.34,
+      flip: Math.random() * Math.PI,
+      vf: 0.12 + Math.random() * 0.16,
+      color: POPPER_COLORS[(Math.random() * POPPER_COLORS.length) | 0],
+      life: 0,
+      ttl: 90 + Math.random() * 60,
+    });
+  }
+  L.pieces.push({ ring: true, x, y, color: inkColor(host), life: 0, ttl: 30 });
+  runConfetti();
+}
+
+// The hairline square that opens under every press.
+function inkPulse(src) {
+  if (typeof window === "undefined" || reduceMotion()) return;
+  const { x, y } = pressPoint(src);
+  const dot = document.createElement("span");
+  dot.className = "mo-pulse";
+  dot.setAttribute("aria-hidden", "true");
+  dot.style.left = x + "px";
+  dot.style.top = y + "px";
+  moOverlay().appendChild(dot);
+  setTimeout(() => dot.remove(), 560);
+}
+
+// Mono specimen toast, announced politely so the confirmation is not
+// something only a sighted user gets.
+function toast(message) {
+  if (!message || typeof document === "undefined") return;
+  const host = moOverlay();
+  let rail = host.querySelector(".mo-toast-rail");
+  if (!rail) {
+    rail = document.createElement("div");
+    rail.className = "mo-toast-rail";
+    rail.setAttribute("role", "status");
+    rail.setAttribute("aria-live", "polite");
+    host.appendChild(rail);
+  }
+  const t = document.createElement("div");
+  t.className = "mo-toast";
+  t.textContent = message;
+  rail.appendChild(t);
+  setTimeout(() => {
+    t.classList.add("mo-toast-out");
+    setTimeout(() => t.remove(), 420);
+  }, 2600);
+}
+
+// One call for "the founder just logged something real".
+function celebrate(message, src) {
+  partyPopper(src);
+  toast(message);
+}
+
+// Collection id -> what just happened, for the toast line.
+const LOG_LABELS = {
+  feedback: "Feedback logged",
+  automations: "Automation logged",
+  meetings: "Meeting logged",
+  clients: "Client added",
+  leads: "Lead added",
+  investors: "Investor added",
+  tasks: "Task added",
+  founder_tasks: "Task added",
+};
+
 function Card({ children, className = "", ...p }) {
   return (
-    <div className={"bg-white border border-gray-200 rounded-2xl shadow-sm " + className} {...p}>
+    <div className={"bg-white border border-gray-200 rounded-2xl shadow-sm card-lift " + className} {...p}>
       {children}
     </div>
   );
 }
 
-function Btn({ children, variant = "primary", className = "", ...p }) {
+// `celebrate` is opt-in per button: pass a string and the press fires the
+// party popper with that toast. Every press pops regardless — the ripple is
+// the baseline answer to a click.
+function Btn({ children, variant = "primary", className = "", celebrate: cheer, onClick, ...p }) {
   const styles = {
     primary: "bg-violet-600 hover:bg-violet-700 text-white",
     green: "bg-emerald-500 hover:bg-emerald-600 text-white",
@@ -1029,9 +1416,15 @@ function Btn({ children, variant = "primary", className = "", ...p }) {
     dark: "bg-zinc-800 hover:bg-zinc-700 text-white",
     soft: "bg-violet-500/10 hover:bg-violet-500/20 text-violet-400",
   };
+  const press = (e) => {
+    inkPulse(e);
+    if (cheer) celebrate(typeof cheer === "string" ? cheer : "", e);
+    if (onClick) onClick(e);
+  };
   return (
     <button
-      className={"inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 active:scale-95 " + styles[variant] + " " + className}
+      className={"inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 active:scale-95 btn-pop " + styles[variant] + " " + className}
+      onClick={press}
       {...p}
     >
       {children}
@@ -1049,7 +1442,7 @@ const TONES = {
 
 function Badge({ tone = "blue", children, className = "" }) {
   return (
-    <span className={"inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium " + TONES[tone] + " " + className}>
+    <span className={"inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium mo-badge " + TONES[tone] + " " + className}>
       {children}
     </span>
   );
@@ -1205,7 +1598,7 @@ function useParallax(strength = 0.12) {
 function Stat({ icon: Icon, label, value, delta, tone = "blue", sub }) {
   return (
     <Card className="p-5 flex items-start gap-4 hover:shadow-md transition-shadow">
-      <div className={"w-11 h-11 rounded-xl flex items-center justify-center shrink-0 " + (tone === "emerald" ? "bg-emerald-500/10 text-emerald-400" : tone === "amber" ? "bg-amber-500/10 text-amber-400" : tone === "red" ? "bg-red-500/10 text-red-400" : "bg-violet-500/10 text-violet-400")}>
+      <div className={"w-11 h-11 rounded-xl flex items-center justify-center shrink-0 stat-pop " + (tone === "emerald" ? "bg-emerald-500/10 text-emerald-400" : tone === "amber" ? "bg-amber-500/10 text-amber-400" : tone === "red" ? "bg-red-500/10 text-red-400" : "bg-violet-500/10 text-violet-400")}>
         <Icon size={20} />
       </div>
       <div className="min-w-0">
@@ -1295,6 +1688,19 @@ const SYSTEM_SELF_DESCRIPTION =
 const COMPANY_SNAPSHOT =
   "Company: 'Acme Metrics', a B2B SaaS analytics startup using GenCopilot. Aug 2026 snapshot — MRR $48.2k (+7.4% MoM), 1,240 customers, monthly churn 3.2%, net burn $56k/mo, cash $530k (~9.5 months runway), CAC $142, ARPU $39/mo, gross margin 78%, NPS 42. PMF survey: 41% 'very disappointed'. Top negative feedback theme: dashboard performance. Highest-scoring lead: Sana Kapoor at Northwind Labs (score 97, $45k). Most at-risk account: Brightpath Media (86% churn risk). Nearest compliance deadline: TDS filing Aug 7.";
 
+// The marketing site runs the same assistant under a different contract.
+// COMPANY_SNAPSHOT must never reach it: those are one demo company's figures,
+// and a visitor who has connected nothing would hear "$530k cash, 9.5 months
+// runway" as a statement about themselves. Public mode therefore drops the
+// company context entirely and swaps the persona from co-founder to guide.
+const PUBLIC_SYSTEM_PROMPT =
+  "You are the GenCopilot guide on the public marketing site. You are talking to a visitor who has NOT signed up and has connected no data. " +
+  SYSTEM_SELF_DESCRIPTION +
+  " Answer what GenCopilot is, which modules exist and what each does, who it suits, how getting started works, and pricing — it is free for early-stage teams during early access. " +
+  "You have no access to this visitor's numbers and you never invent any, for them or for anyone else. If they ask something needing their data ('what's my runway?', 'how bad is my churn?'), say plainly that it comes alive once they connect their numbers — a couple of minutes after signup — then offer what you CAN do, like explaining how that module reasons. " +
+  "Never present metrics as though they were theirs. Be warm, specific and concrete; point toward a free account when it genuinely helps rather than pitching at every turn. " +
+  "Plain conversational text only — no markdown headings or bullet lists. Maximum 110 words.";
+
 // ---------------------------------------------------------------------------
 // AI provider switch — mirror of app/.env
 //   VITE_AI_MODE=puter  → Puter.js client-side (free, user-pays, no key)
@@ -1341,15 +1747,16 @@ function loadPuter() {
   });
 }
 
-async function askClaude(moduleName, historyText, text, companyLine) {
-  const systemPrompt =
-    "You are the founder's AI Co-founder inside GenCopilot. Speak in first person as a co-founder — 'we', 'our', 'let's'. You have full context on the platform and on this company. " +
-    SYSTEM_SELF_DESCRIPTION +
-    " " +
-    (companyLine || COMPANY_SNAPSHOT) +
-    " The user is currently in the '" +
-    moduleName +
-    "' module. Be a sharp, warm co-founder: reference the live numbers, be opinionated, suggest next actions. If asked to do work (draft, plan, research, schedule), do it directly in the response. Plain conversational text only — no markdown headings or bullet lists. Maximum 130 words.";
+async function askClaude(moduleName, historyText, text, companyLine, opts = {}) {
+  const systemPrompt = opts.publicMode
+    ? PUBLIC_SYSTEM_PROMPT
+    : "You are the founder's AI Co-founder inside GenCopilot. Speak in first person as a co-founder — 'we', 'our', 'let's'. You have full context on the platform and on this company. " +
+      SYSTEM_SELF_DESCRIPTION +
+      " " +
+      (companyLine || COMPANY_SNAPSHOT) +
+      " The user is currently in the '" +
+      moduleName +
+      "' module. Be a sharp, warm co-founder: reference the live numbers, be opinionated, suggest next actions. If asked to do work (draft, plan, research, schedule), do it directly in the response. Plain conversational text only — no markdown headings or bullet lists. Maximum 130 words.";
 
   const conversationMessages = [];
   // Parse history into proper message format
@@ -1823,7 +2230,13 @@ const JARVIS_PROMPTS = [
   "What should I do this week?",
 ];
 
-function JarvisPanel({ module, companyLine, seed, onClose, company }) {
+function JarvisPanel({ module, companyLine, seed, onClose, company, variant = "app", onCta }) {
+  // "public" is the marketing-site posture: no company context, guide persona,
+  // and a signup CTA where the app build shows a wordmark. `module` is absent
+  // out there, so every read of it has to tolerate undefined.
+  const isPublic = variant === "public";
+  const moduleName = (module && module.name) || "the GenCopilot marketing site";
+  const peer = isPublic ? "GenCopilot" : "co-founder";
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
   const [state, setState] = useState("idle"); // idle | listening | thinking | speaking
@@ -1858,7 +2271,7 @@ function JarvisPanel({ module, companyLine, seed, onClose, company }) {
       .join("\n");
 
     try {
-      const reply = await askClaude(module.name, historyText, text, companyLine);
+      const reply = await askClaude(moduleName, historyText, text, companyLine, { publicMode: isPublic });
       setMsgs((m) => [...m, { role: "assistant", text: reply }]);
       if (voiceOutRef.current) {
         setState("speaking");
@@ -1898,19 +2311,29 @@ function JarvisPanel({ module, companyLine, seed, onClose, company }) {
     state === "thinking" ? "Thinking…" :
     state === "speaking" ? "Speaking…" : "Ready to listen";
 
-  const QUICK_ACTIONS = [
-    { label: "Research", prompt: "Research the latest market trends for our space and give me a quick briefing." },
-    { label: "Brainstorm", prompt: "Brainstorm 3 product ideas we could ship this quarter with our current runway." },
-    { label: "Write", prompt: "Draft a short investor update covering MRR, churn, and next quarter priorities." },
-    { label: "Execute", prompt: "What are the top 3 actions I should take today based on our current metrics?" },
-  ];
+  // The app's quick actions all assume live numbers to reason over. On the
+  // marketing site there are none, so the public set asks the questions a
+  // visitor actually arrives with instead.
+  const QUICK_ACTIONS = isPublic
+    ? [
+        { label: "What is it", prompt: "What is GenCopilot, and what does it actually replace for a founder?" },
+        { label: "Modules", prompt: "Walk me through the modules — what does each one actually do?" },
+        { label: "Pricing", prompt: "What does GenCopilot cost, and what do I get for free?" },
+        { label: "Fit for us", prompt: "We're a pre-seed team of four. Honestly, is GenCopilot a fit for us right now?" },
+      ]
+    : [
+        { label: "Research", prompt: "Research the latest market trends for our space and give me a quick briefing." },
+        { label: "Brainstorm", prompt: "Brainstorm 3 product ideas we could ship this quarter with our current runway." },
+        { label: "Write", prompt: "Draft a short investor update covering MRR, churn, and next quarter priorities." },
+        { label: "Execute", prompt: "What are the top 3 actions I should take today based on our current metrics?" },
+      ];
 
   return (
     <div className="flex flex-col h-full min-h-0 ink-invert" style={{ background: "#0a0a0a", color: "#ffffff" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-5 shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold tracking-tight text-zinc-100">Co-founder</span>
+          <span className="text-sm font-semibold tracking-tight text-zinc-100">{isPublic ? "Ask GenCopilot" : "Co-founder"}</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -1945,7 +2368,7 @@ function JarvisPanel({ module, companyLine, seed, onClose, company }) {
           </p>
           <p className="text-sm text-zinc-400 max-w-[240px] leading-relaxed">
             {msgs.length === 0
-              ? "Speak freely, I'm here to help."
+              ? (isPublic ? "Ask me anything about GenCopilot." : "Speak freely, I'm here to help.")
               : state === "idle"
                 ? "Tap the mic or type a message."
                 : state === "listening"
@@ -1973,9 +2396,19 @@ function JarvisPanel({ module, companyLine, seed, onClose, company }) {
         ))}
       </div>
 
-      {/* Footer */}
+      {/* Footer. On the marketing site the wordmark is redundant — the visitor
+          is already on it — so the space carries the conversion instead. */}
       <div className="px-6 pb-4 pt-1 text-center shrink-0">
-        <span className="text-[11px] text-zinc-500 tracking-wide">Powered by GenCopilot</span>
+        {isPublic && onCta ? (
+          <button
+            onClick={() => onCta("signup")}
+            className="mono text-[11px] uppercase tracking-wide text-zinc-400 hover:text-white border-b border-zinc-600 hover:border-white pb-0.5"
+          >
+            Create a free account
+          </button>
+        ) : (
+          <span className="text-[11px] text-zinc-500 tracking-wide">Powered by GenCopilot</span>
+        )}
       </div>
 
       {/* Input bar */}
@@ -1985,16 +2418,16 @@ function JarvisPanel({ module, companyLine, seed, onClose, company }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") send(); }}
-            placeholder="Type a message…"
-            aria-label="Message Co-founder"
+            placeholder={isPublic ? "Ask about GenCopilot…" : "Type a message…"}
+            aria-label={isPublic ? "Ask GenCopilot" : "Message Co-founder"}
             className="chat-input flex-1 min-w-0 text-sm focus:outline-none"
           />
           <button
             onClick={speech.toggle}
             disabled={!speech.supported}
             aria-pressed={speech.listening}
-            title={speech.supported ? (speech.listening ? "Stop listening" : "Talk to co-founder") : "Voice input needs Chrome, Edge or Safari"}
-            aria-label={speech.supported ? (speech.listening ? "Stop listening" : "Talk to co-founder") : "Voice not supported"}
+            title={speech.supported ? (speech.listening ? "Stop listening" : "Talk to " + peer) : "Voice input needs Chrome, Edge or Safari"}
+            aria-label={speech.supported ? (speech.listening ? "Stop listening" : "Talk to " + peer) : "Voice not supported"}
             className={
               "w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 disabled:opacity-30 " +
               (speech.listening ? "bg-white text-zinc-900 pulse-dot" : "text-zinc-400 hover:text-white hover:bg-white/10")
@@ -2118,6 +2551,122 @@ function JarvisDock({ open, mobileOpen, onClose, onCloseMobile, module, companyL
   );
 }
 
+// ----------------------------------------------- public: marketing copilot --
+// The dashboard's assistant, brought out onto the marketing site so a visitor
+// can interrogate the product before signing up.
+//
+// It floats rather than splitting the screen the way JarvisDock does: the
+// public pages are a single scroll column whose sections are composed against
+// the full viewport width, and carving 400px out of them would wreck every one
+// of those compositions. Public mode (see PUBLIC_SYSTEM_PROMPT) also strips the
+// company context, so this panel never speaks about numbers the visitor has
+// not given it.
+function PublicCopilot({ open, seed, onOpen, onClose, onAuth }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  // The mobile sheet covers the page; without this the marketing page keeps
+  // scrolling under it whenever a touch lands outside the message list.
+  useEffect(() => {
+    if (!open) return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  const panel = <JarvisPanel variant="public" seed={seed} onClose={onClose} onCta={onAuth} />;
+
+  return (
+    <>
+      {!open && (
+        <button
+          onClick={() => onOpen()}
+          className="pc-launcher fixed bottom-4 right-4 z-[55] flex items-center gap-2.5 pl-2 pr-4 py-2"
+          aria-label="Ask the GenCopilot AI"
+        >
+          <span className="pc-launcher-orb" aria-hidden="true">
+            <ThinkingOrb state="idle" size={30} />
+          </span>
+          <span className="mono text-[11px] uppercase tracking-wide">Ask the AI</span>
+        </button>
+      )}
+
+      {open && (
+        <div
+          className="pc-panel hidden md:flex fixed bottom-4 right-4 z-[60] flex-col overflow-hidden"
+          role="dialog"
+          aria-label="Ask GenCopilot"
+          style={{ width: 400, height: "min(640px, calc(100vh - 2rem))" }}
+        >
+          {panel}
+        </div>
+      )}
+
+      {open && (
+        <div className="md:hidden fixed inset-0 z-[60] flex flex-col" role="dialog" aria-label="Ask GenCopilot">
+          <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+          <div className="pc-panel relative mt-auto h-[88vh] overflow-hidden">{panel}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// The hero's own way in. It deliberately does not answer inline: a second
+// transcript on the page would fork the conversation, so this seeds the
+// floating panel and everything continues in one place.
+function HeroAsk({ onAsk }) {
+  const [q, setQ] = useState("");
+  const CHIPS = ["What is GenCopilot?", "Which modules do I get?", "Is it free?"];
+
+  const fire = (text) => {
+    const t = String(text || "").trim();
+    if (!t) return;
+    setQ("");
+    onAsk(t);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 border border-white/15 px-3 py-2">
+        <Sparkles size={15} className="shrink-0 text-zinc-400" aria-hidden="true" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") fire(q); }}
+          placeholder="Ask the AI co-founder anything…"
+          aria-label="Ask the AI co-founder anything"
+          className="chat-input flex-1 min-w-0 text-sm focus:outline-none"
+        />
+        <button
+          onClick={() => fire(q)}
+          className="w-9 h-9 flex items-center justify-center shrink-0"
+          style={{ background: "var(--fg)", color: "var(--bg)" }}
+          aria-label="Ask"
+        >
+          <Send size={15} />
+        </button>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {CHIPS.map((c) => (
+          <button
+            key={c}
+            onClick={() => fire(c)}
+            className="mono text-[10px] uppercase tracking-wide px-2.5 py-1 border border-white/15 text-zinc-400 hover:text-white hover:border-white/40"
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------ public: nav --
 function GoogleG() {
   return (
@@ -2150,7 +2699,7 @@ function scrollToId(id) {
   }, 80);
 }
 
-function PublicNav({ route, go, onAuth }) {
+function PublicNav({ route, go, onAuth, onAskAI }) {
   const [open, setOpen] = useState(false);
   const link = "text-sm font-semibold text-slate-600 hover:text-violet-700 transition px-1 py-2";
   const items = (
@@ -2166,6 +2715,7 @@ function PublicNav({ route, go, onAuth }) {
         <button onClick={() => go("landing")} aria-label="GenCopilot home"><Logo /></button>
         <nav className="hidden md:flex items-center gap-6">{items}</nav>
         <div className="hidden md:flex items-center gap-2.5">
+          <Btn variant="ghost" onClick={() => onAskAI()}><Sparkles size={14} /> Ask AI</Btn>
           <Btn variant="ghost" onClick={() => onAuth("login")}>Log in</Btn>
           <Btn onClick={() => onAuth("signup")}>Sign Up Free <ArrowRight size={15} /></Btn>
         </div>
@@ -2176,6 +2726,7 @@ function PublicNav({ route, go, onAuth }) {
       {open && (
         <div className="md:hidden border-t border-gray-200 bg-white px-4 py-3 flex flex-col gap-1 anim-fadeUp">
           {items}
+          <Btn variant="ghost" className="mt-1" onClick={() => { setOpen(false); onAskAI(); }}><Sparkles size={14} /> Ask AI</Btn>
           <div className="flex gap-2 pt-2">
             <Btn variant="ghost" className="flex-1" onClick={() => { setOpen(false); onAuth("login"); }}>Log in</Btn>
             <Btn className="flex-1" onClick={() => { setOpen(false); onAuth("signup"); }}>Sign Up Free</Btn>
@@ -2361,8 +2912,129 @@ function FooterBig({ go, onAuth }) {
 }
 
 // --------------------------------------------------------- public: landing -
-function Landing({ go, onAuth }) {
+// The pinned walkthrough's four stages. Each carries its own generated plate,
+// so the artwork turns over as the copy does — no image assets involved.
+const LANDING_STEPS = [
+  {
+    label: "Connect your numbers",
+    title: "Start with what you already have.",
+    body: "MRR, cash, burn, customers, churn. Enter them once in Company Data — that becomes the single source of truth every other module reads from.",
+    variant: "bars",
+    seed: 7,
+  },
+  {
+    label: "Ten modules light up",
+    title: "One entry, ten live workspaces.",
+    body: "Runway projects itself. Unit economics resolve. Churn cohorts assemble. Nothing gets re-entered, because nothing is a separate tool.",
+    variant: "orbit",
+    seed: 13,
+  },
+  {
+    label: "The copilot starts advising",
+    title: "An AI co-founder that reads your data.",
+    body: "It has your live numbers open in front of it and knows how every module connects. Ask where you stand and it answers from your figures, not from a template.",
+    variant: "concentric",
+    seed: 21,
+  },
+  {
+    label: "Ship the week's decisions",
+    title: "Leave with the three things that matter.",
+    body: "Risk alerts, prioritised leads, save plays, filing deadlines. The cockpit tells you what moved and what needs you — before the Monday meeting, not during it.",
+    variant: "wave",
+    seed: 29,
+  },
+];
+
+// Pinned walkthrough. The section holds still while the four stages advance,
+// so the sequence is read at scroll speed instead of skimmed past.
+//
+// Under prefers-reduced-motion PinnedSteps never registers its trigger and
+// would sit on stage one forever, silently dropping three quarters of the
+// copy. That case gets a plain stacked rendering instead.
+function HowItWorks() {
+  const reduced = prefersReduced();
+
+  const plate = (step) => (
+    <div className="aspect-square w-full max-w-md mx-auto border border-white/15 p-8 text-white">
+      <SpecimenPlate seed={step.seed} variant={step.variant} />
+    </div>
+  );
+
+  if (reduced) {
+    return (
+      <section className="border-t border-gray-200 py-20">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
+          <SectionHead kicker="How it works" title="From your numbers to your next three decisions" />
+          <div className="mt-14 space-y-16">
+            {LANDING_STEPS.map((s, i) => (
+              <div key={s.label} className="grid lg:grid-cols-2 gap-10 items-center">
+                <div>
+                  <div className="mono text-[11px] uppercase text-zinc-500 mb-4">
+                    {String(i + 1).padStart(2, "0")} · {s.label}
+                  </div>
+                  <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-tight">{s.title}</h3>
+                  <p className="mt-4 text-zinc-400 leading-relaxed max-w-md">{s.body}</p>
+                </div>
+                <div className="hidden lg:block">{plate(s)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border-t border-gray-200">
+      <PinnedSteps
+        steps={LANDING_STEPS}
+        height={320}
+        renderStep={(active, steps) => (
+          <div className="min-h-screen flex items-center">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 w-full grid lg:grid-cols-2 gap-14 items-center">
+              <div>
+                <div className="mono text-[11px] uppercase text-zinc-500 mb-5">
+                  How it works · {String(active + 1).padStart(2, "0")} / {String(steps.length).padStart(2, "0")}
+                </div>
+                <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+                  {steps[active].title}
+                </h2>
+                <div className="mo-rule mo-rule-thick mt-6 max-w-md" />
+                <p className="mt-5 text-lg text-zinc-400 leading-relaxed max-w-md">{steps[active].body}</p>
+                <ol className="mt-8 space-y-2.5">
+                  {steps.map((s, i) => (
+                    <li key={s.label} className="flex items-center gap-3">
+                      <span
+                        className="mono text-[10px] w-6 h-6 flex items-center justify-center shrink-0"
+                        style={{
+                          border: "1px solid var(--fg)",
+                          background: i === active ? "var(--fg)" : "transparent",
+                          color: i === active ? "var(--bg)" : "var(--fg-muted)",
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className={"text-sm " + (i === active ? "text-white font-semibold" : "text-zinc-500")}>
+                        {s.label}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div className="relative hidden lg:block">{plate(steps[active])}</div>
+            </div>
+          </div>
+        )}
+      />
+    </section>
+  );
+}
+
+function Landing({ go, onAuth, onAsk }) {
   const previewRef = useParallax(0.05);
+  // Pinned sections measure their start on mount, before the display face has
+  // loaded. Refreshing once fonts settle stops the pin from firing early.
+  useScrollTriggerRefresh([]);
   return (
     <div>
       {/* Hero */}
@@ -2394,6 +3066,11 @@ function Landing({ go, onAuth }) {
               <MoBtn variant="ghost" className="px-6 py-3 text-base" onClick={() => scrollToId("features")}>
                 Explore Features
               </MoBtn>
+            </div>
+            {/* The copilot, surfaced on the marketing page itself: ask it
+                before signing up rather than after. */}
+            <div className="mt-7 max-w-xl" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1010ms both" }}>
+              <HeroAsk onAsk={onAsk} />
             </div>
             <div className="mt-8 flex items-center gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1080ms both" }}>
               {/* The overlap idiom relied on rounded-full + a white ring to
@@ -2533,6 +3210,8 @@ function Landing({ go, onAuth }) {
         </div>
       </section>
 
+      <HowItWorks />
+
       {/* Carousel */}
       <section className="bg-white/[.03] py-20">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -2553,13 +3232,13 @@ function Landing({ go, onAuth }) {
             [3.4, "×", 1, "faster weekly reporting"],
             [24, "/7", 0, "AI copilot on your data"],
           ].map(([n, suffix, decimals, l], i) => (
-            <div key={l}>
+            <MoReveal key={l} delay={i * 90}>
               <div className="text-4xl font-extrabold text-violet-400 mo-tick">
                 <ScrubCounter to={n} suffix={suffix} decimals={decimals} />
               </div>
               <div className="mo-rule mx-auto mt-3 mb-2" style={{ width: 34, animationDelay: i * 90 + "ms" }} />
               <div className="text-sm text-zinc-500 font-medium">{l}</div>
-            </div>
+            </MoReveal>
           ))}
         </div>
       </section>
@@ -2567,25 +3246,29 @@ function Landing({ go, onAuth }) {
       {/* CTA band — also the target the footer's Pricing link scrolls to,
           since early access is free and this band is the pricing statement. */}
       <section id="pricing" className="max-w-7xl mx-auto px-4 md:px-6 py-20">
-        <div className="rounded-3xl bg-violet-600 p-10 md:p-14 text-center text-white relative overflow-hidden">
-          {/* generated dot field on the plate, inherits the inverted ink ramp */}
-          <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{ color: "var(--fg)", opacity: 0.4 }}>
-            <HalftoneField gap={20} dotMax={2.8} />
-          </div>
-          <div className="relative">
-            <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-              <MoLine delay={0}>Stop guessing. Start piloting.</MoLine>
-            </h3>
-            <div className="mo-rule mx-auto mt-5" style={{ width: 120, background: "var(--fg)" }} />
-            <p className="mt-5 text-white/85 max-w-xl mx-auto">
-              Free for early-stage teams. Set up in minutes — your dashboard is one signup away.
-            </p>
-            <div className="mt-7 flex justify-center gap-3 flex-wrap">
-              <MoBtn variant="dark" inverted className="bg-white text-violet-700 hover:bg-violet-50 px-6 py-3 text-base" onClick={() => onAuth("signup")}>Create free account</MoBtn>
-              <MoBtn variant="dark" className="bg-black/30 hover:bg-black/45 px-6 py-3 text-base" onClick={() => go("contact")}>Talk to us</MoBtn>
+        {/* The closing plate wipes open as it enters — clip-path scrubbed by
+            scroll position, so it tracks the reader rather than a timer. */}
+        <ScrubWipe from="left">
+          <div className="rounded-3xl bg-violet-600 p-10 md:p-14 text-center text-white relative overflow-hidden">
+            {/* generated dot field on the plate, inherits the inverted ink ramp */}
+            <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{ color: "var(--fg)", opacity: 0.4 }}>
+              <HalftoneField gap={20} dotMax={2.8} />
+            </div>
+            <div className="relative">
+              <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+                <MoLine delay={0}>Stop guessing. Start piloting.</MoLine>
+              </h3>
+              <div className="mo-rule mx-auto mt-5" style={{ width: 120, background: "var(--fg)" }} />
+              <p className="mt-5 text-white/85 max-w-xl mx-auto">
+                Free for early-stage teams. Set up in minutes — your dashboard is one signup away.
+              </p>
+              <div className="mt-7 flex justify-center gap-3 flex-wrap">
+                <MoBtn variant="dark" inverted className="bg-white text-violet-700 hover:bg-violet-50 px-6 py-3 text-base" onClick={() => onAuth("signup")}>Create free account</MoBtn>
+                <MoBtn variant="dark" className="bg-black/30 hover:bg-black/45 px-6 py-3 text-base" onClick={() => go("contact")}>Talk to us</MoBtn>
+              </div>
             </div>
           </div>
-        </div>
+        </ScrubWipe>
       </section>
     </div>
   );
@@ -3212,7 +3895,7 @@ function Topbar({ user, setUser, setActive, onLogout, openMobileNav, company }) 
 
 function ModuleShell({ module, children, noChat = false, companyLine }) {
   return (
-    <div className="anim-fadeUp">
+    <div className="anim-fadeUp mo-page">
       <div className="mb-6">
         <Badge tone="emerald" className="mb-2">{module.track}</Badge>
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">{module.name}</h1>
@@ -5903,7 +6586,7 @@ function ClientsModule({ module, company, user }) {
               <textarea value={sel.notes} onChange={(e) => updateSel({ notes: e.target.value })} rows={4} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
             </div>
             <div className="mt-3 flex items-center gap-2 flex-wrap">
-              <Btn variant="primary" onClick={() => alert("Touch logged")}><MessageSquare size={14} /> Log a touch</Btn>
+              <Btn variant="primary" celebrate="Touch logged"><MessageSquare size={14} /> Log a touch</Btn>
               <Btn variant="soft"><Sparkles size={14} /> Ask co-founder for a save play</Btn>
             </div>
           </Card>
@@ -7037,7 +7720,12 @@ function useSub(uid, coll) {
   const api = React.useMemo(() => ({
     async add(data) {
       if (!uid) return alert("You're not signed in with a cloud account — log in to save data.");
-      try { const fb = await import("./firebase.js"); await fb.addSub(uid, coll, data); } catch (e) { alert("Save failed: " + (e?.message || e)); }
+      try {
+        const fb = await import("./firebase.js");
+        await fb.addSub(uid, coll, data);
+        // Only after the write lands — a popper for a save that failed is a lie.
+        celebrate(LOG_LABELS[coll] || "Logged");
+      } catch (e) { alert("Save failed: " + (e?.message || e)); }
     },
     async upd(id, data) { try { const fb = await import("./firebase.js"); await fb.updSub(uid, coll, id, data); } catch (e) { alert("Update failed: " + (e?.message || e)); } },
     async del(id) { try { const fb = await import("./firebase.js"); await fb.delSub(uid, coll, id); } catch (e) { alert("Delete failed: " + (e?.message || e)); } },
@@ -7300,8 +7988,8 @@ function PMFLive({ module, user, company, setCompany }) {
           <div className="flex items-center gap-4">
             <span className="text-5xl font-extrabold text-slate-900">{(company.waitlist || 0).toLocaleString()}</span>
             <div className="flex gap-2">
-              <Btn variant="soft" className="px-3 py-2 text-sm" onClick={() => upd({ waitlist: (company.waitlist || 0) + 1 })}>+1</Btn>
-              <Btn variant="soft" className="px-3 py-2 text-sm" onClick={() => upd({ waitlist: (company.waitlist || 0) + 10 })}>+10</Btn>
+              <Btn variant="soft" className="px-3 py-2 text-sm" celebrate="Waitlist +1" onClick={() => upd({ waitlist: (company.waitlist || 0) + 1 })}>+1</Btn>
+              <Btn variant="soft" className="px-3 py-2 text-sm" celebrate="Waitlist +10" onClick={() => upd({ waitlist: (company.waitlist || 0) + 10 })}>+10</Btn>
               <Btn variant="ghost" className="px-3 py-2 text-sm" onClick={() => { const v = prompt("Set waitlist total:", String(company.waitlist || 0)); if (v != null) upd({ waitlist: parseInt(v) || 0 }); }}>Set…</Btn>
             </div>
           </div>
@@ -8117,6 +8805,17 @@ export default function App() {
   const [chatSeed, setChatSeed] = useState(null);
   const [jarvisOpen, setJarvisOpen] = useState(true);
   const [jarvisMobile, setJarvisMobile] = useState(false);
+  // The marketing site's copilot is a separate dock from the dashboard's. The
+  // two can never both mount: showJarvis requires route === "app", and
+  // PublicCopilot only renders in the public branch below.
+  const [publicChatOpen, setPublicChatOpen] = useState(false);
+  const [publicSeed, setPublicSeed] = useState(null);
+  const openPublicChat = React.useCallback((prompt) => {
+    // JarvisPanel re-fires on seed.at, so asking the same question twice still
+    // sends. Called bare (nav button, launcher) it just opens the panel.
+    if (prompt) setPublicSeed({ prompt, at: Date.now() });
+    setPublicChatOpen(true);
+  }, []);
   const openDetail = React.useCallback((payload) => setDetail(payload), []);
   const openCmd = React.useCallback(() => setCmdOpen(true), []);
   // Every existing openChat() call site (command palette, module CTAs) now
@@ -8275,13 +8974,20 @@ export default function App() {
   } else if (route === "auth") {
     content = <AuthPage mode={authMode} setMode={setAuthMode} onLogin={onLogin} goHome={() => setRoute("landing")} />;
   } else {
-    const page = route === "about" ? <About onAuth={onAuth} /> : route === "contact" ? <Contact /> : <Landing go={setRoute} onAuth={onAuth} />;
+    const page = route === "about" ? <About onAuth={onAuth} /> : route === "contact" ? <Contact /> : <Landing go={setRoute} onAuth={onAuth} onAsk={openPublicChat} />;
     content = (
       <div className="min-h-screen bg-white flex flex-col">
-        <PublicNav route={route} go={setRoute} onAuth={onAuth} />
+        <PublicNav route={route} go={setRoute} onAuth={onAuth} onAskAI={openPublicChat} />
         {/* the marketing surface had no <main>: no skip target, no landmark */}
         <main id="main" className="flex-1">{page}</main>
         <FooterBig go={setRoute} onAuth={onAuth} />
+        <PublicCopilot
+          open={publicChatOpen}
+          seed={publicSeed}
+          onOpen={openPublicChat}
+          onClose={() => setPublicChatOpen(false)}
+          onAuth={onAuth}
+        />
       </div>
     );
   }
