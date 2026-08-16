@@ -1516,6 +1516,72 @@ const LOG_LABELS = {
   founder_tasks: "Task added",
 };
 
+// Founding is relentless and mostly unwitnessed. This is one button whose
+// entire job is to say something kind, so it costs nothing and asks nothing:
+// no model call, no network, no state to get wrong.
+//
+// {n} is the founder's first name where we have one. Lines that read fine
+// without a name are kept separate, so a signed-in user with no name set
+// never sees an awkward gap.
+const MOTIVATIONS_NAMED = [
+  "{n}, the fact that you keep showing up is the whole skill.",
+  "Most people talk about it. You're the one with the dashboard open, {n}.",
+  "{n}, today's numbers are a snapshot, not a verdict.",
+  "Whatever else happens today, {n}, you already did the hard part: you started.",
+  "{n}, you're further along than the version of you who opened this a month ago.",
+  "Founders who check their runway on purpose are the ones who extend it. Nice work, {n}.",
+  "{n}, nobody is coming to do it for you — and you clearly worked that out already.",
+];
+
+const MOTIVATIONS_PLAIN = [
+  "Slow progress is still the direction everyone else is only talking about.",
+  "The boring week is the one that compounds. Keep going.",
+  "You are allowed to be proud of something that isn't finished yet.",
+  "Every number on this screen exists because you made it exist.",
+  "Hard day? The company still moved. So did you.",
+  "Doubt is standard issue for this job. It isn't evidence.",
+  "You've survived every worst day so far. That record is perfect.",
+];
+
+// A pick-me-up, on tap. Draws without replacement so it never repeats until
+// the pool is spent — the same line twice in a row would read as canned and
+// undo the whole point.
+function Motivator({ userName }) {
+  const pool = useRef([]);
+
+  const first = String(userName || "").trim().split(/\s+/)[0] || "";
+  const pretty = first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
+
+  const lift = (e) => {
+    if (!pool.current.length) {
+      const lines = pretty
+        ? [...MOTIVATIONS_NAMED, ...MOTIVATIONS_PLAIN]
+        : [...MOTIVATIONS_PLAIN];
+      // Fisher-Yates, so a refilled pool isn't the same order as the last one.
+      for (let i = lines.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [lines[i], lines[j]] = [lines[j], lines[i]];
+      }
+      pool.current = lines;
+    }
+    const line = pool.current.pop().replace(/\{n\}/g, pretty);
+    // Same popper + polite live-region toast the logging flows use, so this
+    // is announced to a screen reader rather than being confetti only.
+    celebrate(line, e);
+  };
+
+  return (
+    <button
+      onClick={lift}
+      aria-label="Give me a lift"
+      title="Need a lift?"
+      className="btn-pop w-11 h-11 rounded-full bg-white border border-gray-200 text-violet-600 shadow-lg hover:shadow-xl hover:text-violet-700 hover:border-violet-300 flex items-center justify-center transition-all"
+    >
+      <Heart size={18} />
+    </button>
+  );
+}
+
 function Card({ children, className = "", ...p }) {
   return (
     <div className={"bg-white border border-gray-200 rounded-2xl shadow-sm card-lift " + className} {...p}>
@@ -10249,19 +10315,27 @@ export default function App() {
         <ClickSpark sparkColor="#a78bfa" sparkSize={9} sparkRadius={18} sparkCount={8} duration={450}>
         {content}
         {showJarvis && (
-          <button
-            onClick={() => { setJarvisOpen(true); setJarvisMobile(true); }}
+          // Stacked so the lift button sits directly above Jarvis and the two
+          // hide together: on desktop the open dock already occupies this
+          // corner, and a lone floating heart over it reads as a stray.
+          <div
             className={
-              "fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-violet-600 text-white pl-4 pr-5 py-3.5 shadow-xl hover:shadow-2xl hover:scale-105 transition-all " +
+              "fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 " +
               (jarvisOpen ? "lg:hidden" : "")
             }
           >
-            <span className="relative flex">
-              <Sparkles size={20} />
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-300 pulse-dot" />
-            </span>
-            <span className="text-sm font-bold">Ask Jarvis</span>
-          </button>
+            <Motivator userName={user?.name} />
+            <button
+              onClick={() => { setJarvisOpen(true); setJarvisMobile(true); }}
+              className="flex items-center gap-2 rounded-full bg-violet-600 text-white pl-4 pr-5 py-3.5 shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+            >
+              <span className="relative flex">
+                <Sparkles size={20} />
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-300 pulse-dot" />
+              </span>
+              <span className="text-sm font-bold">Ask Jarvis</span>
+            </button>
+          </div>
         )}
         <DetailDrawer payload={detail} onClose={() => setDetail(null)} />
         <CommandPalette
