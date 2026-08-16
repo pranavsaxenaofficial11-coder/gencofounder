@@ -4323,22 +4323,44 @@ function Topbar({ user, setUser, setActive, onLogout, openMobileNav, company }) 
 
         {/* Profile */}
         <div className="relative">
-          <button onClick={() => { setProfOpen(!profOpen); setNotifOpen(false); }} className="flex items-center gap-2.5 pl-1.5 pr-2.5 py-1.5 rounded-xl hover:bg-gray-100 transition">
-            <span className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center text-xs font-extrabold">
-              {user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
-            </span>
-            <span className="hidden sm:block text-left">
-              <span className="block text-sm font-bold text-slate-800 leading-tight">{user.name}</span>
-              <span className="block text-[11px] font-semibold text-slate-400 leading-tight">{user.role}</span>
-            </span>
-            <ChevronDown size={15} className="text-slate-400" />
-          </button>
+          {/* Avatar opens My Profile; the chevron stays a separate target for the account menu. */}
+          <div className="flex items-center rounded-xl hover:bg-gray-100 transition">
+            <button
+              onClick={() => { setActive("profile"); setProfOpen(false); setNotifOpen(false); setThemeOpen(false); }}
+              className="flex items-center gap-2.5 pl-1.5 pr-1.5 py-1.5 rounded-l-xl"
+              aria-label="Open my profile"
+              title="Open my profile"
+            >
+              <span className="w-8 h-8 rounded-lg bg-violet-600 text-white flex items-center justify-center text-xs font-extrabold">
+                {user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+              </span>
+              <span className="hidden sm:block text-left">
+                <span className="block text-sm font-bold text-slate-800 leading-tight">{user.name}</span>
+                <span className="block text-[11px] font-semibold text-slate-400 leading-tight">{user.role}</span>
+              </span>
+            </button>
+            <button
+              onClick={() => { setProfOpen(!profOpen); setNotifOpen(false); setThemeOpen(false); }}
+              className="pl-0.5 pr-2 py-2.5 rounded-r-xl"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded={profOpen}
+            >
+              <ChevronDown size={15} className="text-slate-400" />
+            </button>
+          </div>
           {profOpen && (
             <Card className="absolute right-0 top-12 w-72 shadow-xl overflow-hidden anim-fadeUp lp-glass">
               <div className="px-4 py-3.5 border-b border-gray-100">
                 <div className="text-sm font-extrabold text-slate-900">{user.name}</div>
                 <div className="text-xs text-slate-400">{user.email}</div>
               </div>
+              <button
+                onClick={() => { setActive("profile"); setProfOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-gray-50 transition border-b border-gray-100"
+              >
+                <User size={16} className="text-violet-600" /> My Profile
+              </button>
               <div className="px-4 py-3 border-b border-gray-100">
                 <div className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400 mb-2">View as (role-based access demo)</div>
                 <div className="grid grid-cols-3 gap-1.5">
