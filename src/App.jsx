@@ -2575,9 +2575,140 @@ function HeroAskPilot({ onAskPilot }) {
   );
 }
 
+// The pinned walkthrough's four stages. Each carries its own generated plate,
+// so the artwork turns over as the copy does — nothing to download.
+const LANDING_STEPS = [
+  {
+    label: "Connect your numbers",
+    title: "Start with what you already have.",
+    body: "MRR, cash, burn, customers, churn. Enter them once in Company Data — that becomes the single source of truth every other module reads from.",
+    variant: "bars",
+    seed: 7,
+  },
+  {
+    label: "The modules light up",
+    title: "One entry, ten live workspaces.",
+    body: "Runway projects itself. Unit economics resolve. Churn cohorts assemble. Nothing gets re-entered, because nothing is a separate tool.",
+    variant: "orbit",
+    seed: 13,
+  },
+  {
+    label: "Your co-founder starts advising",
+    title: "An AI that reads your actual data.",
+    body: "It has your live numbers in front of it and knows how every module connects. Ask where you stand and it answers from your figures, not from a template.",
+    variant: "concentric",
+    seed: 21,
+  },
+  {
+    label: "Ship the week's decisions",
+    title: "Leave with the three things that matter.",
+    body: "Risk alerts, prioritised leads, save plays, filing deadlines. The cockpit tells you what moved and what needs you — before the Monday meeting, not during it.",
+    variant: "wave",
+    seed: 29,
+  },
+];
+
+// Pinned walkthrough. The section holds still while the four stages advance
+// under the scroll, so the sequence is read at reading pace instead of
+// skimmed past in one flick.
+//
+// Under prefers-reduced-motion PinnedSteps never registers its trigger and
+// would sit on stage one forever, silently dropping three quarters of the
+// copy. That case gets a plain stacked rendering of all four instead.
+function HowItWorks() {
+  const reducedMotion = usePrefersReducedMotion();
+
+  const plate = (step) => (
+    <div className="aspect-square w-full max-w-sm mx-auto border border-white/15 p-8 text-white">
+      <SpecimenPlate seed={step.seed} variant={step.variant} />
+    </div>
+  );
+
+  if (reducedMotion) {
+    return (
+      <section className="max-w-7xl mx-auto px-4 md:px-6 py-20">
+        <SectionHead
+          center
+          kicker="How it works"
+          title="From your numbers to your next three decisions"
+        />
+        <div className="mt-14 space-y-16">
+          {LANDING_STEPS.map((s, i) => (
+            <div key={s.label} className="grid lg:grid-cols-2 gap-10 items-center">
+              <div>
+                <div className="mono text-[11px] uppercase text-zinc-500 mb-4">
+                  {String(i + 1).padStart(2, "0")} · {s.label}
+                </div>
+                <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-tight">{s.title}</h3>
+                <p className="mt-4 text-zinc-400 leading-relaxed max-w-md">{s.body}</p>
+              </div>
+              <div className="hidden lg:block">{plate(s)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border-t border-gray-200">
+      <PinnedSteps
+        steps={LANDING_STEPS}
+        height={320}
+        renderStep={(active, steps) => (
+          <div className="min-h-screen flex items-center overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 w-full grid lg:grid-cols-2 gap-14 items-center">
+              <div>
+                <div className="mono text-[11px] uppercase text-zinc-500 mb-5">
+                  How it works · {String(active + 1).padStart(2, "0")} / {String(steps.length).padStart(2, "0")}
+                </div>
+                {/* keyed on `active` so the copy re-enters on every stage change
+                    rather than swapping in place */}
+                <div key={active} className="anim-fadeUp">
+                  <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+                    {steps[active].title}
+                  </h2>
+                  <div className="mo-rule mo-rule-thick mt-6 max-w-md" />
+                  <p className="mt-5 text-lg text-zinc-400 leading-relaxed max-w-md">{steps[active].body}</p>
+                </div>
+                <ol className="mt-8 space-y-2.5">
+                  {steps.map((s, i) => (
+                    <li key={s.label} className="flex items-center gap-3">
+                      <span
+                        className="mono text-[10px] w-6 h-6 flex items-center justify-center shrink-0"
+                        style={{
+                          border: "1px solid var(--fg)",
+                          background: i === active ? "var(--fg)" : "transparent",
+                          color: i === active ? "var(--bg)" : "var(--fg-muted)",
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className={"text-sm " + (i === active ? "text-white font-semibold" : "text-zinc-500")}>
+                        {s.label}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div key={"plate-" + active} className="relative hidden lg:block anim-fadeUp">
+                {plate(steps[active])}
+              </div>
+            </div>
+          </div>
+        )}
+      />
+    </section>
+  );
+}
+
 function Landing({ go, onAuth, onAskPilot }) {
   const previewRef = useParallax(0.05);
   const reducedMotion = usePrefersReducedMotion();
+  // The pinned section measures its start on mount, before the display face
+  // and the WebGL canvases above it have settled. Refreshing once fonts land
+  // stops the pin from firing at the wrong scroll position.
+  useScrollTriggerRefresh([]);
   return (
     <div>
       {/* Hero */}
@@ -2800,6 +2931,8 @@ function Landing({ go, onAuth, onAskPilot }) {
         </div>
       </section>
 
+      <HowItWorks />
+
       {/* Carousel */}
       <section className="bg-white/[.03] py-20">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
@@ -2851,6 +2984,9 @@ function Landing({ go, onAuth, onAskPilot }) {
       {/* CTA band — also the target the footer's Pricing link scrolls to,
           since early access is free and this band is the pricing statement. */}
       <section id="pricing" className="max-w-7xl mx-auto px-4 md:px-6 py-20">
+        {/* the closing plate wipes open as it enters — clip-path scrubbed by
+            scroll position, so it tracks the reader rather than a timer */}
+        <ScrubWipe from="left">
         <div className="rounded-3xl bg-violet-600 p-10 md:p-14 text-center text-white relative overflow-hidden">
           {/* generated dot field on the plate, inherits the inverted ink ramp */}
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{ color: "var(--fg)", opacity: 0.4 }}>
@@ -2880,6 +3016,7 @@ function Landing({ go, onAuth, onAskPilot }) {
             </div>
           </div>
         </div>
+        </ScrubWipe>
       </section>
     </div>
   );
