@@ -947,6 +947,54 @@ html, body { max-width:100%; overflow-x:hidden; }
 .lp-root .gc-buddy-dot{animation:gcBuddyDot 1.3s ease-in-out infinite}
 @keyframes gcBuddyDot{0%,80%,100%{opacity:.25;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
 
+/* ---------- work buddy (the same Pilot, inside the dashboard) ------------- */
+/* The signup buddy is painted for one fixed surface — the dark auth panel —
+   so its white/10 bubble is hardcoded. This one floats over a themed
+   workspace, so every colour comes from a token and it follows the theme
+   toggle without a second set of rules. */
+.lp-root .gc-wb{
+  position:fixed;z-index:45;bottom:5.25rem;left:.75rem;
+  display:flex;align-items:flex-end;gap:.6rem;pointer-events:none;
+}
+/* Clear the 16rem sidebar on desktop, and drop back down: at this width the
+   bottom-centre popper rail is nowhere near the left gutter. */
+@media (min-width:1024px){.lp-root .gc-wb{left:17.25rem;bottom:1.25rem}}
+.lp-root .gc-wb > *{pointer-events:auto}
+.lp-root .gc-wb-orb{
+  width:2.75rem;height:2.75rem;border-radius:14px;flex:0 0 auto;border:0;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;letter-spacing:-.05em;color:#fff;
+  background:linear-gradient(140deg,#7c3aed,#d946ef);
+  box-shadow:var(--shadow-md);cursor:pointer;
+  animation:gcBuddyFloat 3.6s ease-in-out infinite;
+}
+.lp-root .gc-wb-orb:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.lp-root .gc-wb-orb[data-muted="1"]{background:var(--surface-3);color:var(--fg-faint);animation:none}
+.lp-root .gc-wb-say{
+  position:relative;max-width:min(19rem,calc(100vw - 6rem));
+  background:var(--surface);border:1px solid var(--border-2);
+  border-radius:16px;border-bottom-left-radius:5px;
+  padding:.7rem .9rem;box-shadow:var(--shadow-xl);
+  animation:gcBuddyIn .38s cubic-bezier(.16,1,.3,1) both;
+}
+.lp-root .gc-wb-text{font-size:13px;line-height:1.5;color:var(--fg)}
+.lp-root .gc-wb-foot{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:.35rem;
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted);
+}
+/* Mute stays out of the way until you look for it — hover or keyboard focus.
+   It is always in the DOM so it is always reachable by tab. */
+.lp-root .gc-wb-mute{opacity:0;transition:opacity .18s;color:var(--fg-muted);text-transform:inherit;letter-spacing:inherit;font:inherit;background:none;border:0;cursor:pointer}
+.lp-root .gc-wb-say:hover .gc-wb-mute,.lp-root .gc-wb-mute:focus-visible{opacity:1}
+.lp-root .gc-wb-mute:hover{color:var(--fg)}
+.lp-root .gc-wb-x{
+  position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:9999px;
+  display:flex;align-items:center;justify-content:center;padding:0;
+  background:var(--surface-3);border:1px solid var(--border-2);color:var(--fg-muted);
+  font-size:11px;line-height:1;cursor:pointer;
+}
+.lp-root .gc-wb-x:hover{color:var(--fg)}
+
 /* ==========================================================================
    POP + CELEBRATION — interaction layer (wins by source order)
    The editorial system disarms interaction motion on purpose: it kills every
@@ -1076,7 +1124,7 @@ html, body { max-width:100%; overflow-x:hidden; }
   .lp-root .gc-overlay-scrim,.lp-root .gc-overlay-panel,.lp-root .gc-msg-in,
   .lp-root .gc-toast,.lp-root .gc-toast-out,.lp-root .gc-toast-icon,
   .lp-root .gc-toast-bar,.lp-root .gc-buddy-bubble,.lp-root .gc-buddy-orb,
-  .lp-root .gc-buddy-dot{animation:none!important}
+  .lp-root .gc-buddy-dot,.lp-root .gc-wb-orb,.lp-root .gc-wb-say{animation:none!important}
 }
 `;
 
@@ -1487,10 +1535,27 @@ function toast(message) {
   }, 2600);
 }
 
+// Pilot (see WorkBuddy) needs to know when real work lands, but it lives in
+// React and celebrate() is a bare function called from data-layer code. This
+// is the seam between the two: a set of listeners, nothing more.
+const buddyBus = {
+  subs: new Set(),
+  on(fn) { this.subs.add(fn); return () => this.subs.delete(fn); },
+  emit(ev) {
+    // A companion is decoration. It must never be the reason a save appears
+    // to fail, so a throwing listener is swallowed rather than propagated.
+    this.subs.forEach((fn) => { try { fn(ev); } catch { /* never break the save */ } });
+  },
+};
+
 // One call for "the founder just logged something real".
 function celebrate(message, src) {
   partyPopper(src);
   toast(message);
+  // Deliberately here and not at the call sites: every genuine write already
+  // funnels through celebrate() (see useUserCollection.add), so the companion
+  // reacts to work that actually persisted — never to a click that failed.
+  buddyBus.emit({ kind: "log", label: message || "" });
 }
 
 // Collection id -> what just happened, for the toast line.
@@ -3856,6 +3921,221 @@ function SignupBuddy({ state }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- work buddy -----------------------------------------------------------
+// Pilot again, on the far side of the login form.
+//
+// The signup buddy reacts to a form being filled in. This one reacts to work
+// being done: every write that actually reached Firestore (through the
+// buddyBus seam in celebrate), every module you move into, and the rhythm of
+// the two together. Same rules as its sibling — every line is derived locally
+// from something that already happened, so it answers instantly, costs nothing
+// per line, and is still there when the network isn't.
+//
+// Restraint matters more here than on the auth page. A companion that talks
+// during a form you leave in thirty seconds is charming; the same companion
+// beside a working day is a colleague who won't shut up. So it speaks only for
+// things that were earned, holds a quiet window between ambient lines,
+// retires each line on its own, and can be muted for good in one click.
+const WB_QUIET_MS = 25000;     // minimum gap between ambient (module) lines
+const WB_HOLD_MS = 6500;       // how long a line stays up before retiring itself
+const WB_AWAY_MS = 5 * 60000;  // away longer than this and coming back is worth a word
+
+// What each kind of save is actually worth. Keyed by the LOG_LABELS string
+// celebrate() already broadcasts, so the praise names the thing that landed
+// instead of saying "nice job" at everything identically.
+const WB_PRAISE = {
+  "Client added": "A client on the books. That's the number that argues back.",
+  "Lead added": "Another one in the pipe. Pipeline is a habit, not a lucky month.",
+  "Investor added": "Logged before you need them — that's how a warm intro stays warm.",
+  "Task added": "Out of your head and onto the board. Good instinct.",
+  "Meeting logged": "Written up while it's still fresh. That's the bit everyone skips.",
+  "Feedback logged": "Straight from a customer. Highest-quality data you own.",
+  "Automation logged": "An hour bought back, permanently. That compounds.",
+};
+
+// Said on the way into a module: part orientation, part credit for opening the
+// thing most people avoid.
+const WB_MODULE = {
+  overview: "The whole picture. Good place to think from.",
+  tasks: "Delegation is a founder skill, not an admin chore.",
+  meetings: "Agendas beat vibes. This is you buying back everyone's afternoon.",
+  team: "Your people. The org chart is a product too.",
+  pmf: "Back on product–market fit. The ones who win are the ones who keep asking.",
+  feedback: "Reading what customers actually said — braver than reading a dashboard.",
+  leads: "Pipeline work. This is what pays for everything else.",
+  churn: "Opening the churn number takes a bit of nerve. Respect.",
+  clients: "The people who already said yes. Worth the attention.",
+  runway: "Checking runway on purpose rather than in a panic. Right way round.",
+  unit: "Unit economics. Unglamorous, and the thing that decides it.",
+  investors: "Warm list beats cold deck, every single time.",
+  compliance: "Boring right up until it isn't. Good on you for staying ahead of it.",
+  automation: "Every hour you automate here, you get back forever.",
+  company: "Keeping the numbers current — everything downstream leans on this.",
+  interview: "Teaching me about the company. Every answer I give gets sharper for it.",
+  news: "Reading the market. Cheapest edge there is.",
+  markets: "Knowing the landscape before the board asks about it.",
+  talent: "Hiring is the highest-leverage thing on your desk today.",
+  community: "Showing up for the people around the product.",
+};
+
+// Fallbacks for a save with no specific line (Btn's own celebrate strings land
+// here). Picked by hash, not at random, so the same event keeps the same words.
+const WB_GENERIC = [
+  "Logged. Small, but they all count.",
+  "That's on the record now. Good.",
+  "Noted — your future self just got an easier week.",
+  "Done properly. I like that.",
+];
+
+// Milestones interrupt the per-item praise: the tenth save of a session is
+// about the session, not about the tenth item.
+function wbWorkLine(label, n) {
+  if (n > 0 && n % 10 === 0) return `That's ${n} logged in one sitting. This is what a well-run company looks like from the inside.`;
+  if (n === 5) return "Five in one go. Most founders never keep score this honestly.";
+  if (n === 3) return "Three in a row — there's a rhythm here. I'd stay in it.";
+  if (n === 1) return WB_PRAISE[label] || "First one on the board. Starting is the expensive part.";
+  return WB_PRAISE[label] || hashPick(label + n, WB_GENERIC);
+}
+
+function wbGreeting(name) {
+  const h = new Date().getHours();
+  const part = h < 5 || h >= 22 ? "Late one" : h < 12 ? "Morning" : h < 17 ? "Afternoon" : "Evening";
+  return `${name ? `${part}, ${name}.` : `${part}.`} I'll be down here keeping score while you work.`;
+}
+
+function wbOnDemand(n) {
+  if (n === 0) return "Nothing logged yet. Pick the smallest thing on your list and put it on the board — that's the whole trick.";
+  if (n < 3) return `${n} logged so far. That's a start, and the start is the expensive part.`;
+  if (n < 6) return `${n} logged today. You're already past where most days end.`;
+  return `${n} logged. Genuinely — that is a good day's work.`;
+}
+
+function WorkBuddy({ module, user }) {
+  const [line, setLine] = useState(null);
+  const [muted, setMuted] = useState(() => {
+    try { return localStorage.getItem("gc.pilotMuted") === "1"; } catch { return false; }
+  });
+
+  const streak = useRef(0);      // real saves this session — the thing being praised
+  const lastAt = useRef(0);      // when Pilot last spoke, for the quiet window
+  const modRef = useRef(module?.id);
+  // say() is stable across renders (the bus subscription depends on it), so
+  // mute is mirrored into a ref rather than read from the captured state.
+  const mutedRef = useRef(muted);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
+
+  // The single door every line goes through, so mute, the quiet window and the
+  // retire timer can't be forgotten at one call site. `force` is for things the
+  // founder earned — a save is always worth a word, a module switch isn't.
+  const say = React.useCallback((text, { force = false, tone = "cheer" } = {}) => {
+    if (!text || mutedRef.current) return;
+    const now = Date.now();
+    if (!force && now - lastAt.current < WB_QUIET_MS) return;
+    lastAt.current = now;
+    setLine({ text, tone, at: now, n: streak.current });
+  }, []);
+
+  // Each line retires itself. Keyed on `at` so a new line restarts the clock
+  // instead of inheriting the previous one's remaining time.
+  useEffect(() => {
+    if (!line) return;
+    const t = setTimeout(() => setLine((cur) => (cur && cur.at === line.at ? null : cur)), WB_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [line]);
+
+  // Real work landing. buddyBus.on returns its own unsubscribe.
+  useEffect(() => buddyBus.on((ev) => {
+    if (ev.kind !== "log") return;
+    streak.current += 1;
+    say(wbWorkLine(ev.label, streak.current), { force: true });
+  }), [say]);
+
+  // Moving between modules. Ambient, so it obeys the quiet window; the initial
+  // module is seeded into modRef above so arriving doesn't count as a switch.
+  useEffect(() => {
+    const id = module?.id;
+    if (!id || id === modRef.current) return;
+    modRef.current = id;
+    say(WB_MODULE[id], { tone: "calm" });
+  }, [module?.id, say]);
+
+  // Opening hello, once, after the dashboard has settled.
+  //
+  // The name is deliberately a dependency: `user` boots as the placeholder
+  // "Founder" and is replaced when the Firestore profile resolves, so the
+  // pending timer is restarted to greet with the real name. The ref is what
+  // keeps that from becoming two hellos — once it has actually been said, a
+  // later-arriving name doesn't re-open the conversation.
+  const greeted = useRef(false);
+  const firstName = (user?.name || "").trim().split(/\s+/)[0] || "";
+  useEffect(() => {
+    if (greeted.current) return;
+    const t = setTimeout(() => {
+      greeted.current = true;
+      say(wbGreeting(firstName), { force: true, tone: "wave" });
+    }, 2200);
+    return () => clearTimeout(t);
+  }, [firstName, say]);
+
+  // Back after a break. Only counts as a return if the tab was genuinely away.
+  useEffect(() => {
+    let leftAt = 0;
+    const onVis = () => {
+      if (document.hidden) { leftAt = Date.now(); return; }
+      if (!leftAt || Date.now() - leftAt < WB_AWAY_MS) return;
+      leftAt = 0;
+      say(
+        streak.current
+          ? `Welcome back. ${streak.current} logged before you stepped away — pick it straight up.`
+          : "Welcome back. Nothing's moved without you.",
+        { force: true, tone: "wave" },
+      );
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [say]);
+
+  const setMute = (v) => {
+    setMuted(v);
+    mutedRef.current = v;
+    try { localStorage.setItem("gc.pilotMuted", v ? "1" : "0"); } catch { /* private mode */ }
+    if (v) setLine(null);
+  };
+
+  const onOrb = () => {
+    // setMute writes mutedRef synchronously, so the line below clears the gate
+    // it just opened and the unmute has something to show for itself.
+    if (muted) { setMute(false); say("Back. I'll keep it to the things you've earned.", { force: true, tone: "wave" }); return; }
+    if (line) { setLine(null); return; }
+    say(wbOnDemand(streak.current), { force: true });
+  };
+
+  return (
+    <div className="gc-wb" role="status" aria-live="polite">
+      <button
+        type="button"
+        className="gc-wb-orb"
+        data-muted={muted ? "1" : "0"}
+        onClick={onOrb}
+        aria-label={muted ? "Unmute Pilot" : line ? "Dismiss Pilot" : "Ask Pilot how the day is going"}
+      >
+        <span aria-hidden="true">{muted ? BUDDY_FACES.think : BUDDY_FACES[line?.tone] || BUDDY_FACES.calm}</span>
+      </button>
+
+      {!muted && line && (
+        <div className="gc-wb-say" key={line.at}>
+          <button type="button" className="gc-wb-x" onClick={() => setLine(null)} aria-label="Dismiss message">✕</button>
+          <div className="gc-wb-text">{line.text}</div>
+          <div className="gc-wb-foot">
+            <span>{line.n > 0 ? `${line.n} logged` : "Pilot"}</span>
+            <button type="button" className="gc-wb-mute" onClick={() => setMute(true)}>Mute</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -10106,6 +10386,10 @@ export default function App() {
             seed={chatSeed}
           />
         )}
+        {/* The signup buddy, carried through the login form into the work
+            itself. Jarvis answers questions on the right; Pilot sits bottom
+            left and says nothing unless you've earned it. */}
+        <WorkBuddy module={mod} user={user} />
       </div>
     );
   } else if (route === "auth") {
