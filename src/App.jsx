@@ -1425,6 +1425,23 @@ const SYSTEM_SELF_DESCRIPTION =
 const COMPANY_SNAPSHOT =
   "Company: 'Acme Metrics', a B2B SaaS analytics startup using GenCopilot. Aug 2026 snapshot — MRR $48.2k (+7.4% MoM), 1,240 customers, monthly churn 3.2%, net burn $56k/mo, cash $530k (~9.5 months runway), CAC $142, ARPU $39/mo, gross margin 78%, NPS 42. PMF survey: 41% 'very disappointed'. Top negative feedback theme: dashboard performance. Highest-scoring lead: Sana Kapoor at Northwind Labs (score 97, $45k). Most at-risk account: Brightpath Media (86% churn risk). Nearest compliance deadline: TDS filing Aug 7.";
 
+// Pilot is the character a visitor already meets on the signup form (see
+// SignupBuddy / buddyScript). Out on the marketing site it keeps the name and
+// the voice but gains a real model behind it, so it can answer questions
+// instead of reacting to form fields.
+//
+// COMPANY_SNAPSHOT must never reach this prompt. Those are one demo company's
+// figures, and a visitor who has connected nothing would hear "$530k cash,
+// 9.5 months runway" as a statement about themselves.
+const PUBLIC_SYSTEM_PROMPT =
+  "You are Pilot, the guide on GenCopilot's public marketing site. The visitor has NOT signed up and has connected no data. " +
+  "You are warm, direct and a little playful — the same voice that greets people on the signup form — but you are here to answer questions, not to make small talk. " +
+  SYSTEM_SELF_DESCRIPTION +
+  " Answer what GenCopilot is, which modules exist and what each does, who it suits, how getting started works, and pricing — free for early-stage teams during early access. " +
+  "You have no access to this visitor's numbers and you never invent any, for them or for anyone else. If they ask something that needs their data ('what's my runway?', 'how bad is my churn?'), say plainly that it comes alive once they connect their numbers — a couple of minutes after signup — then offer what you CAN do, such as explaining how that module reasons. " +
+  "Never present metrics as though they were theirs. Point toward a free account when it genuinely helps rather than pitching at every turn. " +
+  "Plain conversational text only — no markdown headings or bullet lists. Maximum 90 words.";
+
 // ---------------------------------------------------------------------------
 // AI provider switch — mirror of app/.env
 //   VITE_AI_MODE=puter  → Puter.js client-side (free, user-pays, no key)
@@ -1471,15 +1488,16 @@ function loadPuter() {
   });
 }
 
-async function askClaude(moduleName, historyText, text, companyLine) {
-  const systemPrompt =
-    "You are the founder's AI Co-founder inside GenCopilot. Speak in first person as a co-founder — 'we', 'our', 'let's'. You have full context on the platform and on this company. " +
-    SYSTEM_SELF_DESCRIPTION +
-    " " +
-    (companyLine || COMPANY_SNAPSHOT) +
-    " The user is currently in the '" +
-    moduleName +
-    "' module. Be a sharp, warm co-founder: reference the live numbers, be opinionated, suggest next actions. If asked to do work (draft, plan, research, schedule), do it directly in the response. Plain conversational text only — no markdown headings or bullet lists. Maximum 130 words.";
+async function askClaude(moduleName, historyText, text, companyLine, opts = {}) {
+  const systemPrompt = opts.publicMode
+    ? PUBLIC_SYSTEM_PROMPT
+    : "You are the founder's AI Co-founder inside GenCopilot. Speak in first person as a co-founder — 'we', 'our', 'let's'. You have full context on the platform and on this company. " +
+      SYSTEM_SELF_DESCRIPTION +
+      " " +
+      (companyLine || COMPANY_SNAPSHOT) +
+      " The user is currently in the '" +
+      moduleName +
+      "' module. Be a sharp, warm co-founder: reference the live numbers, be opinionated, suggest next actions. If asked to do work (draft, plan, research, schedule), do it directly in the response. Plain conversational text only — no markdown headings or bullet lists. Maximum 130 words.";
 
   const conversationMessages = [];
   // Parse history into proper message format
@@ -2280,7 +2298,7 @@ function scrollToId(id) {
   }, 80);
 }
 
-function PublicNav({ route, go, onAuth }) {
+function PublicNav({ route, go, onAuth, onAskPilot }) {
   const [open, setOpen] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const link = "text-sm font-semibold text-slate-600 hover:text-violet-700 transition px-1 py-2";
@@ -2297,6 +2315,7 @@ function PublicNav({ route, go, onAuth }) {
         <button onClick={() => go("landing")} aria-label="GenCopilot home"><Logo /></button>
         <nav className="hidden md:flex items-center gap-6">{items}</nav>
         <div className="hidden md:flex items-center gap-2.5">
+          <Btn variant="ghost" onClick={() => onAskPilot()}><Sparkles size={14} /> Ask Pilot</Btn>
           <Btn variant="ghost" onClick={() => onAuth("login")}>Log in</Btn>
           <Magnet padding={40} magnetStrength={4} disabled={reducedMotion}>
             <Btn onClick={() => onAuth("signup")}>Sign Up Free <ArrowRight size={15} /></Btn>
@@ -2309,6 +2328,7 @@ function PublicNav({ route, go, onAuth }) {
       {open && (
         <div className="md:hidden border-t border-gray-200 bg-white px-4 py-3 flex flex-col gap-1 anim-fadeUp">
           {items}
+          <Btn variant="ghost" className="mt-1" onClick={() => { setOpen(false); onAskPilot(); }}><Sparkles size={14} /> Ask Pilot</Btn>
           <div className="flex gap-2 pt-2">
             <Btn variant="ghost" className="flex-1" onClick={() => { setOpen(false); onAuth("login"); }}>Log in</Btn>
             <Btn className="flex-1" onClick={() => { setOpen(false); onAuth("signup"); }}>Sign Up Free</Btn>
@@ -2499,7 +2519,63 @@ function FooterBig({ go, onAuth }) {
 }
 
 // --------------------------------------------------------- public: landing -
-function Landing({ go, onAuth }) {
+// Pilot's way in from the hero. It deliberately does not answer inline — a
+// second transcript on the page would fork the conversation — so it hands the
+// question to the docked panel and everything continues in one place.
+function HeroAskPilot({ onAskPilot }) {
+  const [q, setQ] = useState("");
+  const CHIPS = ["What is GenCopilot?", "Which modules do I get?", "Is it free?"];
+
+  const fire = (text) => {
+    const t = String(text || "").trim();
+    if (!t) return;
+    setQ("");
+    onAskPilot(t);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 border border-white/15 px-3 py-2">
+        <span
+          className="gc-buddy-orb w-7 h-7 rounded-2xl shrink-0 flex items-center justify-center text-[10px] font-bold text-white select-none"
+          style={PILOT_ORB_STYLE}
+          aria-hidden="true"
+        >
+          {BUDDY_FACES.wave}
+        </span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") fire(q); }}
+          placeholder="Ask Pilot anything about GenCopilot…"
+          aria-label="Ask Pilot anything about GenCopilot"
+          className="chat-input flex-1 min-w-0 text-sm focus:outline-none"
+        />
+        <button
+          onClick={() => fire(q)}
+          className="w-9 h-9 flex items-center justify-center shrink-0"
+          style={{ background: "var(--fg)", color: "var(--bg)" }}
+          aria-label="Ask Pilot"
+        >
+          <Send size={15} />
+        </button>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {CHIPS.map((c) => (
+          <button
+            key={c}
+            onClick={() => fire(c)}
+            className="mono text-[10px] uppercase tracking-wide px-2.5 py-1 border border-white/15 text-zinc-400 hover:text-white hover:border-white/40 transition"
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Landing({ go, onAuth, onAskPilot }) {
   const previewRef = useParallax(0.05);
   const reducedMotion = usePrefersReducedMotion();
   return (
@@ -2578,6 +2654,11 @@ function Landing({ go, onAuth }) {
                   Explore Features
                 </MoBtn>
               </Magnet>
+            </div>
+            {/* Pilot, surfaced on the page itself: ask before signing up
+                rather than after. */}
+            <div className="mt-7 max-w-xl" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1010ms both" }}>
+              <HeroAskPilot onAskPilot={onAskPilot} />
             </div>
             <div className="mt-8 flex items-center gap-3" style={{ animation: "fadeUp .8s cubic-bezier(.16,1,.3,1) 1080ms both" }}>
               {/* The overlap idiom relied on rounded-full + a white ring to
@@ -3175,6 +3256,200 @@ function SignupBuddy({ state }) {
             <span key={d} className="gc-buddy-dot w-1 h-1 rounded-full bg-white/50" style={{ animationDelay: d * 0.16 + "s" }} />
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------- Pilot, on the web --
+// The same character, off the signup form and onto the marketing site — same
+// face, same bubble, same voice, but backed by the real model through
+// askClaude's public mode so it answers questions instead of reacting to form
+// fields.
+//
+// This component stays mounted for the whole public session and only swaps
+// between launcher and panel. Unmounting on close would throw away the
+// transcript and, worse, replay the last seeded question on reopen, because
+// the seed effect fires on mount.
+const PILOT_CHIPS = [
+  { label: "What is it", prompt: "What is GenCopilot, and what does it actually replace for a founder?" },
+  { label: "Modules", prompt: "Walk me through the modules — what does each one actually do?" },
+  { label: "Pricing", prompt: "What does GenCopilot cost, and what do I get for free?" },
+  { label: "Is it for us", prompt: "We're a pre-seed team of four. Honestly, is GenCopilot a fit for us right now?" },
+];
+
+const PILOT_GREETING = "Hi, I'm Pilot. Ask me anything about GenCopilot.";
+
+const PILOT_ORB_STYLE = { background: "linear-gradient(140deg,#7c3aed,#d946ef)", letterSpacing: "-.05em" };
+
+function PilotChat({ open, seed, onOpen, onClose, onAuth }) {
+  const [msgs, setMsgs] = useState([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const endRef = useRef(null);
+  const busyRef = useRef(false);
+  const msgsRef = useRef(msgs);
+  msgsRef.current = msgs;
+
+  async function send(forced) {
+    const text = String(forced != null ? forced : input).trim();
+    if (!text || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setInput("");
+    setMsgs((m) => [...m, { role: "user", text }]);
+
+    // askClaude parses these exact prefixes back into roles, so they stay as
+    // they are even though nobody out here is a founder yet.
+    const historyText = msgsRef.current
+      .slice(-6)
+      .map((m) => (m.role === "user" ? "Founder: " : "Co-founder: ") + m.text)
+      .join("\n");
+
+    try {
+      const reply = await askClaude("the GenCopilot marketing site", historyText, text, null, { publicMode: true });
+      setMsgs((m) => [...m, { role: "assistant", text: reply }]);
+    } catch (e) {
+      const detail = e && e.message ? " (" + e.message + ")" : "";
+      setMsgs((m) => [...m, {
+        role: "assistant",
+        text: "I couldn't reach the AI just now" + detail + ". Try me again in a moment — or skip ahead and create a free account.",
+      }]);
+    }
+    busyRef.current = false;
+    setBusy(false);
+  }
+
+  // Seeded by the nav button or the hero ask bar: open with the question
+  // already sent. Keyed on seed.at so asking the same thing twice still fires.
+  useEffect(() => {
+    if (seed && seed.prompt) send(seed.prompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed ? seed.at : 0]);
+
+  useEffect(() => {
+    if (endRef.current) endRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [msgs, busy, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const orb = (face, size) => (
+    <span
+      className={"gc-buddy-orb " + size + " rounded-2xl shrink-0 flex items-center justify-center text-[12px] font-bold text-white select-none"}
+      style={PILOT_ORB_STYLE}
+      aria-hidden="true"
+    >
+      {face}
+    </span>
+  );
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => onOpen()}
+        className="fixed bottom-4 right-4 z-[55] flex items-center gap-2.5 bg-white border border-gray-200 pl-2 pr-4 py-2"
+        aria-label="Ask Pilot about GenCopilot"
+      >
+        {orb(BUDDY_FACES.wave, "w-9 h-9")}
+        <span className="text-sm font-bold text-slate-800">Ask Pilot</span>
+        {msgs.length > 0 && <span className="w-2 h-2 rounded-full bg-emerald-400 pulse-dot" aria-hidden="true" />}
+      </button>
+    );
+  }
+
+  const face = busy ? BUDDY_FACES.think : msgs.length ? BUDDY_FACES.cheer : BUDDY_FACES.wave;
+
+  return (
+    <div
+      className="fixed z-[60] flex flex-col bg-white border border-gray-200 overflow-hidden inset-x-0 bottom-0 h-[85vh] md:inset-x-auto md:bottom-4 md:right-4 md:h-[600px] md:max-h-[calc(100vh-2rem)] md:w-[400px]"
+      role="dialog"
+      aria-label="Ask Pilot"
+    >
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 shrink-0">
+        {orb(face, "w-9 h-9")}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-slate-900 leading-tight">Pilot</div>
+          <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" /> Here to answer questions
+          </div>
+        </div>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-gray-100 hover:text-slate-700" aria-label="Close">
+          <X size={17} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto scroll-thin px-4 py-4 space-y-3 bg-gray-50" aria-live="polite">
+        <div className="gc-buddy-bubble bg-white border border-gray-200 px-4 py-3 max-w-[85%]">
+          <div className="text-[13px] leading-relaxed text-slate-700">{PILOT_GREETING}</div>
+        </div>
+        {msgs.map((m, i) => (
+          <div key={i} className={"flex " + (m.role === "user" ? "justify-end" : "justify-start")}>
+            <div
+              className={
+                "px-4 py-3 text-[13px] leading-relaxed whitespace-pre-wrap max-w-[85%] " +
+                (m.role === "user"
+                  ? "chat-user-msg rounded-2xl rounded-br-md"
+                  : "gc-buddy-bubble bg-white border border-gray-200 text-slate-700")
+              }
+            >
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {busy && (
+          <div className="gc-buddy-bubble bg-white border border-gray-200 px-4 py-3 w-fit">
+            <div className="flex gap-1" aria-label="Pilot is typing">
+              {[0, 1, 2].map((d) => (
+                <span key={d} className="gc-buddy-dot w-1.5 h-1.5 rounded-full bg-slate-400" style={{ animationDelay: d * 0.16 + "s" }} />
+              ))}
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {msgs.length === 0 && (
+        <div className="px-3 pt-2.5 pb-1 flex flex-wrap gap-1.5 border-t border-gray-200 bg-white shrink-0">
+          {PILOT_CHIPS.map((c) => (
+            <button
+              key={c.label}
+              onClick={() => send(c.prompt)}
+              className="text-xs font-semibold px-2.5 py-1.5 rounded-full bg-violet-50 text-violet-700 hover:bg-violet-100 transition"
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="p-3 bg-white border-t border-gray-200 flex items-center gap-2 shrink-0">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+          placeholder="Ask about GenCopilot…"
+          aria-label="Ask Pilot about GenCopilot"
+          className="chat-input flex-1 min-w-0 rounded-xl text-sm focus:outline-none"
+        />
+        <button
+          onClick={() => send()}
+          disabled={busy}
+          className="w-10 h-10 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white flex items-center justify-center transition shrink-0"
+          aria-label="Send"
+        >
+          <Send size={16} />
+        </button>
+      </div>
+
+      <div className="px-4 pb-3 text-center bg-white shrink-0">
+        <button onClick={() => onAuth("signup")} className="text-[11px] font-semibold text-slate-500 hover:text-violet-700 underline underline-offset-2">
+          Or skip ahead — create a free account
+        </button>
       </div>
     </div>
   );
@@ -9140,6 +9415,17 @@ export default function App() {
   const [chatSeed, setChatSeed] = useState(null);
   const [jarvisOpen, setJarvisOpen] = useState(true);
   const [jarvisMobile, setJarvisMobile] = useState(false);
+  // Pilot on the marketing site. Separate from the dashboard's Jarvis dock —
+  // the two can never both mount, since showJarvis requires route === "app"
+  // and PilotChat only renders in the public branch.
+  const [pilotOpen, setPilotOpen] = useState(false);
+  const [pilotSeed, setPilotSeed] = useState(null);
+  const askPilot = React.useCallback((prompt) => {
+    // Called bare (nav button, launcher) it just opens. With a prompt it also
+    // sends; seed.at makes repeating the same question fire again.
+    if (prompt) setPilotSeed({ prompt, at: Date.now() });
+    setPilotOpen(true);
+  }, []);
   const openDetail = React.useCallback((payload) => setDetail(payload), []);
   const openCmd = React.useCallback(() => setCmdOpen(true), []);
   // Every existing openChat() call site (command palette, module CTAs) now
@@ -9392,13 +9678,20 @@ export default function App() {
   } else if (route === "auth") {
     content = <AuthPage mode={authMode} setMode={setAuthMode} onLogin={onLogin} onGuest={onGuest} goHome={() => setRoute("landing")} />;
   } else {
-    const page = route === "about" ? <About onAuth={onAuth} /> : route === "contact" ? <Contact /> : <Landing go={setRoute} onAuth={onAuth} />;
+    const page = route === "about" ? <About onAuth={onAuth} /> : route === "contact" ? <Contact /> : <Landing go={setRoute} onAuth={onAuth} onAskPilot={askPilot} />;
     content = (
       <div className="min-h-screen bg-white flex flex-col">
-        <PublicNav route={route} go={setRoute} onAuth={onAuth} />
+        <PublicNav route={route} go={setRoute} onAuth={onAuth} onAskPilot={askPilot} />
         {/* the marketing surface had no <main>: no skip target, no landmark */}
         <main id="main" className="flex-1">{page}</main>
         <FooterBig go={setRoute} onAuth={onAuth} />
+        <PilotChat
+          open={pilotOpen}
+          seed={pilotSeed}
+          onOpen={askPilot}
+          onClose={() => setPilotOpen(false)}
+          onAuth={onAuth}
+        />
       </div>
     );
   }
