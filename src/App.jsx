@@ -34,6 +34,17 @@ import LightRays from "@/components/LightRays.jsx";
 import Waves from "@/components/Waves.jsx";
 import DotGrid from "@/components/DotGrid.jsx";
 
+// Portal modules — Business Email, API & Billing, and Team & Access live in
+// their own files so this one stops growing. They borrow the design primitives
+// defined below (Card, Btn, ModuleShell, …) through registerPortalUI, so there
+// is still exactly one definition of each.
+import { registerPortalUI } from "./portal-ui.js";
+import { MailModule } from "./portal-mail.jsx";
+import { BillingModule } from "./portal-billing.jsx";
+import { TeamModule } from "./portal-team.jsx";
+import { setUsageContext, recordAiUsage } from "./usage.js";
+import { getMyOrgId } from "./org.js";
+
 // ---------------------------------------------------------------------------
 // reCAPTCHA v3 config
 // Set your site key here (the public one — safe to commit).
@@ -87,7 +98,7 @@ import {
   MessageSquare, ListChecks, CalendarDays, Handshake, Settings, Plus,
   Trash2, Edit3, Video, Circle, PlayCircle, PauseCircle, UserCheck,
   Sun, Moon, Maximize2, Copy, Gauge, Flame, Download,
-  Heart, Briefcase, MessageCircle,
+  Heart, Briefcase, MessageCircle, CreditCard,
   Mic, MicOff, Volume2, VolumeX, Square, PanelRightClose,
 } from "lucide-react";
 
@@ -1386,7 +1397,8 @@ const MODULES = [
   { id: "overview", name: "Founder Dashboard", track: "Founder Ops", icon: LayoutDashboard, blurb: "KPI charts, team progress, and risk alerts — your startup at a glance." },
   { id: "tasks", name: "Delegate & Tasks", track: "Founder Ops", icon: ListChecks, blurb: "Assign work to your team — or to your AI co-founder — with due dates and status." },
   { id: "meetings", name: "Meeting Command Center", track: "Founder Ops", icon: CalendarDays, blurb: "Schedule meetings, capture agendas and notes, and turn talk into action items." },
-  { id: "team", name: "Team & Access", track: "Founder Ops", icon: Users, blurb: "Your roster, their emails and roles, and who's working on what. Founders and admins can change roles and assign tasks." },
+  { id: "team", name: "Team & Access", track: "Founder Ops", icon: Users, blurb: "Your roster, their details and roles, and who's working on what. Founders and admins can change roles, edit records, and assign tasks." },
+  { id: "mail", name: "Business Email", track: "Founder Ops", icon: Mail, blurb: "Your Microsoft 365 inbox inside the portal — read, reply, and send from your work address." },
   { id: "pmf", name: "Product–Market Fit Validator", track: "Product & Customers", icon: Target, blurb: "Surveys, waitlists, and co-founder insights that tell you if demand is real." },
   { id: "feedback", name: "Customer Feedback Intelligence", track: "Product & Customers", icon: Inbox, blurb: "A unified feedback inbox with sentiment analysis and themes." },
   { id: "leads", name: "AI Lead Prioritization", track: "Growth & Retention", icon: Filter, blurb: "A scored, filterable lead table so sales time goes where revenue is." },
@@ -1395,6 +1407,10 @@ const MODULES = [
   { id: "runway", name: "Runway & Burn Rate Intelligence", track: "Finance", icon: Wallet, blurb: "Cash flow charts, projections, and what-if scenarios.", finance: true },
   { id: "unit", name: "Unit Economics Analyzer", track: "Finance", icon: Calculator, blurb: "Auto-calculated CAC, LTV, payback, and margins from your inputs.", finance: true },
   { id: "investors", name: "Fundraising CRM", track: "Finance", icon: Handshake, blurb: "Investor pipeline, stage tracking, and next steps — with copilot-drafted updates.", finance: true },
+  // Deliberately not finance-gated: a team member should be able to see their
+  // own AI spend. The module itself shows the whole workspace only to
+  // founders and admins, and firestore.rules enforces that.
+  { id: "billing", name: "API & Billing", track: "Finance", icon: CreditCard, blurb: "What your AI actually costs — your own spend and every teammate's, month by month." },
   { id: "compliance", name: "Startup Compliance Assistant", track: "Compliance", icon: ShieldCheck, blurb: "A living checklist with deadlines and co-founder guidance on filings." },
   { id: "automation", name: "AI Workflow Automation Advisor", track: "Automation & Copilot", icon: Workflow, blurb: "Scan manual processes and estimate the ROI of automating them." },
   { id: "copilot", name: "AI Co-founder", track: "Automation & Copilot", icon: Bot, blurb: "Research, competitor analysis, planning, and drafting — on demand." },
@@ -1505,6 +1521,16 @@ async function askClaude(moduleName, historyText, text, companyLine) {
     if (Array.isArray(out)) out = out.map((b) => (typeof b === "string" ? b : b?.text || "")).join("\n");
     out = String(out).trim();
     if (!out) throw new Error("empty response");
+    // Metered, not awaited: billing must never add latency to a reply, and
+    // recordAiUsage swallows its own failures.
+    recordAiUsage({
+      module: moduleName,
+      model: PUTER_MODEL,
+      provider: "puter",
+      usage: result?.usage,
+      promptText: systemPrompt + "\n" + historyText + "\n" + text,
+      completionText: out,
+    });
     return out;
   }
 
@@ -1531,6 +1557,16 @@ async function askClaude(moduleName, historyText, text, companyLine) {
   const data = await res.json();
   const out = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
   if (!out) throw new Error("empty response");
+  // /api/chat passes the provider's own token counts straight through, so
+  // this is measured spend rather than an estimate.
+  recordAiUsage({
+    module: moduleName,
+    model: data.model || NVIDIA_MODEL,
+    provider: "api",
+    usage: data.usage,
+    promptText: systemPrompt + "\n" + historyText + "\n" + text,
+    completionText: out,
+  });
   return out;
 }
 
@@ -4527,6 +4563,10 @@ function OvCopilotStrip({ company }) {
           { model: PUTER_MODEL, max_tokens: 1024 }
         );
         out = typeof result === "string" ? result : (result?.message?.content ?? result?.text ?? "");
+        recordAiUsage({
+          module: "copilot", model: PUTER_MODEL, provider: "puter",
+          usage: result?.usage, promptText: system + "\n" + user, completionText: out,
+        });
       } else {
         const recaptchaToken = await getRecaptchaToken("copilot_refresh");
         const r = await fetch("/api/chat", {
@@ -4544,6 +4584,10 @@ function OvCopilotStrip({ company }) {
         });
         const d = await r.json();
         out = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
+        recordAiUsage({
+          module: "copilot", model: d.model || NVIDIA_MODEL, provider: "api",
+          usage: d.usage, promptText: system + "\n" + user, completionText: out,
+        });
       }
       if (out && String(out).trim()) setText(String(out).trim());
     } catch {
@@ -6533,7 +6577,7 @@ const INTERVIEW_QUESTIONS = [
 
 // One place to talk to whichever model is configured. Returns "" on failure so
 // callers can fall back rather than crash.
-async function askAI(system, userText, maxTokens = 300) {
+async function askAI(system, userText, maxTokens = 300, moduleId = "assistant") {
   try {
     if (AI_MODE === "puter") {
       const puter = await loadPuter();
@@ -6543,7 +6587,12 @@ async function askAI(system, userText, maxTokens = 300) {
         { model: PUTER_MODEL, max_tokens: maxTokens }
       );
       const out = typeof result === "string" ? result : (result?.message?.content ?? result?.text ?? "");
-      return String(out).trim();
+      const text = String(out).trim();
+      recordAiUsage({
+        module: moduleId, model: PUTER_MODEL, provider: "puter",
+        usage: result?.usage, promptText: system + "\n" + userText, completionText: text,
+      });
+      return text;
     }
     const res = await fetch("/api/chat", {
       method: "POST",
@@ -6551,7 +6600,12 @@ async function askAI(system, userText, maxTokens = 300) {
       body: JSON.stringify({ system, messages: [{ role: "user", content: userText }], max_tokens: maxTokens }),
     });
     const data = await res.json();
-    return data?.content?.[0]?.text?.trim() || "";
+    const text = data?.content?.[0]?.text?.trim() || "";
+    recordAiUsage({
+      module: moduleId, model: data?.model || NVIDIA_MODEL, provider: "api",
+      usage: data?.usage, promptText: system + "\n" + userText, completionText: text,
+    });
+    return text;
   } catch {
     return "";
   }
@@ -7750,242 +7804,9 @@ function MiniInput(props) {
 }
 
 // -------------------------------------------------------------------- Team --
-// Roster lives at companies/{founderUid}/team, so it is covered by the existing
-// "owner can read/write their whole workspace" rule — no rules change needed.
-const TEAM_ROLES = ["Founder", "Admin", "Team Member"];
-// Keys must exist in TONES — an unknown tone renders a broken class.
-const ROLE_TONE = { Founder: "blue", Admin: "amber", "Team Member": "emerald" };
-
-// Only a founder or admin may change roles / remove people. A team member sees
-// the roster read-only. This is a UI guard for a single-tenant workspace, not a
-// security boundary — everything here lives under the owner's own document
-// tree, so Firestore already restricts it to them.
-function canManageTeam(user) {
-  return user?.role === "Founder" || user?.role === "Admin";
-}
-
-function TeamModule({ module, user, company, setActive }) {
-  const { notify } = useTheme();
-  const [members, api] = useSub(user?.uid, "team");
-  const [tasks, taskApi] = useSub(user?.uid, "tasks");
-  const [form, setForm] = useState({ name: "", email: "", role: "Team Member", title: "" });
-  const [err, setErr] = useState("");
-  const [assigning, setAssigning] = useState(null); // member being assigned a task
-  const [taskTitle, setTaskTitle] = useState("");
-  const manage = canManageTeam(user);
-
-  // The signed-in founder is always shown first, even before anyone is added.
-  const self = {
-    id: "__self__",
-    name: user?.name || "You",
-    email: user?.email || "—",
-    role: user?.role || "Founder",
-    title: "Account owner",
-    isSelf: true,
-  };
-  const roster = [self, ...(members || [])];
-
-  // Confirmation only after the write actually lands — api.add resolves false
-  // when there's no cloud account or the rules reject it, and it raises its own
-  // error toast in that case.
-  async function addMember() {
-    const name = form.name.trim();
-    const email = form.email.trim();
-    if (!name) return setErr("Add a name.");
-    if (!EMAIL_RE.test(email)) return setErr("That email doesn't look right.");
-    if (roster.some((m) => (m.email || "").toLowerCase() === email.toLowerCase()))
-      return setErr("Someone with that email is already on the team.");
-    setErr("");
-    const ok = await api.add({ name, email, role: form.role, title: form.title.trim() || null, status: "invited" });
-    if (!ok) return;
-    notify({ tone: "success", title: name + " added", body: "Invite them to sign up with " + email + " to give them access." });
-    setForm({ name: "", email: "", role: "Team Member", title: "" });
-  }
-
-  async function assignTask(member) {
-    const t = taskTitle.trim();
-    if (!t) return;
-    const ok = await taskApi.add({ title: t, status: "todo", ai: false, assigneeName: member.name, assigneeEmail: member.email || null });
-    if (!ok) return;
-    notify({ tone: "success", title: "Task assigned", body: `“${t}” → ${member.name}`, actionLabel: "Open tasks", onAction: () => setActive("tasks") });
-    setTaskTitle("");
-    setAssigning(null);
-  }
-
-  async function changeRole(m, role) {
-    if (await api.upd(m.id, { role })) notify({ tone: "info", title: m.name + " is now " + role });
-  }
-
-  async function removeMember(m) {
-    if (await api.del(m.id)) notify({ tone: "info", title: m.name + " removed from the team" });
-  }
-
-  const taskCount = (m) => (tasks || []).filter((t) => t.assigneeName === m.name && (t.status || "todo") !== "done").length;
-  const doneCount = (m) => (tasks || []).filter((t) => t.assigneeName === m.name && t.status === "done").length;
-
-  return (
-    <ModuleShell module={module} companyLine={companyLineFrom(company)}>
-      {/* headline counts */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        {[
-          { label: "People", to: roster.length, icon: Users },
-          { label: "Admins", to: roster.filter((m) => m.role === "Founder" || m.role === "Admin").length, icon: ShieldCheck },
-          { label: "Open tasks", to: (tasks || []).filter((t) => t.assigneeName && (t.status || "todo") !== "done").length, icon: ListChecks },
-          { label: "Completed", to: (tasks || []).filter((t) => t.assigneeName && t.status === "done").length, icon: Check },
-        ].map((k, i) => (
-          <AnimatedContent key={k.label} distance={30} duration={0.5} ease="power3.out" threshold={0.05} delay={i * 0.07}>
-            <SpotlightCard className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 h-full" spotlightColor="rgba(124, 58, 237, 0.14)">
-              <div className="flex items-center gap-2 text-slate-400"><k.icon size={15} /><span className="text-[11px] font-extrabold uppercase tracking-wider">{k.label}</span></div>
-              <div className="text-2xl font-extrabold text-slate-900 mt-1.5"><CountUp to={k.to} duration={1.2} /></div>
-            </SpotlightCard>
-          </AnimatedContent>
-        ))}
-      </div>
-
-      {/* add a teammate — founders/admins only */}
-      {manage && (
-        <Card className="p-4 mb-5">
-          <div className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2"><Plus size={15} className="text-violet-600" /> Add a teammate</div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
-            <MiniInput value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); if (err) setErr(""); }} placeholder="Full name" aria-label="Teammate name" />
-            <MiniInput value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); if (err) setErr(""); }} placeholder="name@company.com" aria-label="Teammate email" type="email" />
-            <MiniInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title (optional)" aria-label="Teammate title" />
-            <select
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-              aria-label="Teammate role"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
-            >
-              {TEAM_ROLES.map((r) => <option key={r}>{r}</option>)}
-            </select>
-            <Btn variant="primary" className="py-2 text-sm" onClick={addMember} disabled={!form.name.trim() || !form.email.trim()}>
-              <Plus size={14} /> Add
-            </Btn>
-          </div>
-          {err && <div className="text-sm font-semibold text-red-600 flex items-center gap-1.5 mt-2.5" role="alert"><AlertTriangle size={14} /> {err}</div>}
-          <p className="text-[11px] text-slate-400 mt-2.5">
-            Adding someone records them on your roster and lets you assign work. They get their own workspace by signing up with that email.
-          </p>
-        </Card>
-      )}
-
-      {/* roster */}
-      {members === null ? (
-        <Card className="p-8 text-center text-sm text-slate-400">Loading your team…</Card>
-      ) : (
-        <div className="space-y-3">
-          {roster.map((m, i) => (
-            <AnimatedContent key={m.id} distance={24} duration={0.45} ease="power3.out" threshold={0.05} delay={Math.min(i, 6) * 0.05}>
-              <Card className="p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Avatar name={m.name} size={42} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-extrabold text-slate-900 truncate">{m.name}</span>
-                      {m.isSelf && <Badge tone="blue">You</Badge>}
-                      {m.status === "invited" && !m.isSelf && <Badge tone="amber">Invited</Badge>}
-                    </div>
-                    <a
-                      href={m.email && m.email !== "—" ? "mailto:" + m.email : undefined}
-                      className="text-xs text-slate-500 hover:text-violet-700 transition truncate block"
-                    >
-                      {m.email}
-                    </a>
-                    {m.title && <div className="text-[11px] text-slate-400 mt-0.5">{m.title}</div>}
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-slate-400 whitespace-nowrap">
-                      <span className="font-bold text-slate-600">{taskCount(m)}</span> open · {doneCount(m)} done
-                    </span>
-
-                    {/* role: editable by managers, except on your own row */}
-                    {manage && !m.isSelf ? (
-                      <select
-                        value={m.role || "Team Member"}
-                        onChange={(e) => changeRole(m, e.target.value)}
-                        aria-label={"Role for " + m.name}
-                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-bold focus:border-violet-500 focus:outline-none"
-                      >
-                        {TEAM_ROLES.map((r) => <option key={r}>{r}</option>)}
-                      </select>
-                    ) : (
-                      <Badge tone={ROLE_TONE[m.role] || "blue"}>{m.role}</Badge>
-                    )}
-
-                    {manage && (
-                      <Btn variant="ghost" className="px-3 py-1.5 text-xs" onClick={() => { setAssigning(assigning === m.id ? null : m.id); setTaskTitle(""); }}>
-                        <ListChecks size={13} /> Assign
-                      </Btn>
-                    )}
-                    {manage && !m.isSelf && (
-                      <button
-                        onClick={() => removeMember(m)}
-                        aria-label={"Remove " + m.name}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
-                      >
-                        <X size={15} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* inline task assignment */}
-                {assigning === m.id && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-2 anim-fadeUp">
-                    <MiniInput
-                      value={taskTitle}
-                      onChange={(e) => setTaskTitle(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && assignTask(m)}
-                      placeholder={"What should " + m.name.split(" ")[0] + " work on?"}
-                      aria-label={"Task for " + m.name}
-                      className="flex-1 min-w-[220px]"
-                      autoFocus
-                    />
-                    <Btn variant="primary" className="px-4 py-2 text-sm" onClick={() => assignTask(m)} disabled={!taskTitle.trim()}>Assign</Btn>
-                    <Btn variant="ghost" className="px-3 py-2 text-sm" onClick={() => setAssigning(null)}>Cancel</Btn>
-                  </div>
-                )}
-
-                {/* what they're currently on */}
-                {taskCount(m) > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-1.5">
-                    {(tasks || [])
-                      .filter((t) => t.assigneeName === m.name && (t.status || "todo") !== "done")
-                      .slice(0, 4)
-                      .map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => setActive("tasks")}
-                          className="text-[11px] font-semibold rounded-full bg-violet-50 text-violet-700 px-2.5 py-1 hover:bg-violet-100 transition max-w-[240px] truncate"
-                          title={t.title}
-                        >
-                          {t.title}
-                        </button>
-                      ))}
-                    {taskCount(m) > 4 && <span className="text-[11px] text-slate-400 self-center">+{taskCount(m) - 4} more</span>}
-                  </div>
-                )}
-              </Card>
-            </AnimatedContent>
-          ))}
-
-          {members.length === 0 && (
-            <Card className="p-8 text-center">
-              <span className="w-12 h-12 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center mx-auto mb-3"><Users size={22} /></span>
-              <div className="text-sm font-bold text-slate-700">It's just you so far</div>
-              <div className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                {manage
-                  ? "Add your co-founders and teammates above — then you can assign them work and track what everyone's on."
-                  : "Your founder hasn't added anyone else yet."}
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-    </ModuleShell>
-  );
-}
+// The roster used to live at companies/{founderUid}/team, which made it
+// invisible to the teammates it described. It now lives in the shared
+// workspace — see src/portal-team.jsx and src/org.js.
 
 // ---------------------------------------------------------------- Overview --
 function OverviewLive({ module, user, company, setActive }) {
@@ -8618,6 +8439,8 @@ const MODULE_VIEWS = {
   news: NewsModule,
   markets: MarketsLive,
   team: TeamModule,
+  mail: MailModule,
+  billing: BillingModule,
   talent: TalentModule,
   messages: MessagesModule,
   profile: ProfileModule,
@@ -8635,6 +8458,16 @@ const ThemeContext = React.createContext({
   notify: () => {},
 });
 const useTheme = () => React.useContext(ThemeContext);
+
+// Hand the design primitives to the portal modules (Business Email, API &
+// Billing, Team & Access), which live in their own files so this one stops
+// growing. Registered here at module scope and read at render time, so there
+// is exactly one definition of each primitive and no prop plumbing.
+registerPortalUI({
+  Card, Btn, Badge, MiniInput, Avatar, ModuleShell,
+  SpotlightCard, AnimatedContent, CountUp,
+  companyLineFrom, useSub, useTheme, EMAIL_RE,
+});
 
 // ============================================================================
 // Toasts — animated, self-dismissing notifications
@@ -9127,6 +8960,25 @@ export default function App() {
     }, 2000);
     return () => clearTimeout(t);
   }, [company, user]);
+
+  // Point the AI cost ledger at whoever is signed in. askClaude/askAI live
+  // outside the React tree and read this from module scope, so it has to be
+  // pushed rather than passed. useOrg refreshes it again once a workspace is
+  // resolved or created, which covers a founder's very first visit.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!user?.uid) { setUsageContext({}); return; }
+      const orgId = await getMyOrgId(user.uid).catch(() => null);
+      if (!alive) return;
+      setUsageContext({
+        uid: user.uid,
+        name: user.name || user.email || "Unknown",
+        orgId,
+      });
+    })();
+    return () => { alive = false; };
+  }, [user?.uid, user?.name, user?.email]);
 
   // Dark is the default look; an explicit choice (theme toggle) is remembered.
   const [theme, setTheme] = useState(() => {

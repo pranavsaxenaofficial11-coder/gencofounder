@@ -17,6 +17,23 @@ service cloud.firestore {
           .data.participants;
     }
 
+    // --- Workspace helpers --------------------------------
+    // A workspace id IS its founder's uid (see ensureOrg in src/org.js), so
+    // the common case is answered without reading a document. The get() is
+    // the correct-by-construction fallback and is only reached for members,
+    // and short-circuiting keeps it off the owner's hot path.
+    function isOrgOwner(orgId) {
+      return signedIn() && (
+        request.auth.uid == orgId ||
+        get(/databases/$(database)/documents/orgs/$(orgId)).data.ownerUid == request.auth.uid
+      );
+    }
+    function isOrgMember(orgId) {
+      return signedIn() && exists(
+        /databases/$(database)/documents/orgs/$(orgId)/members/$(request.auth.uid)
+      );
+    }
+
     // --- Users + their notifications ---------------------
     match /users/{uid} {
       allow read: if signedIn();
@@ -35,6 +52,77 @@ service cloud.firestore {
     // investors, automations, metrics, chats, etc.
     match /companies/{uid}/{document=**} {
       allow read, write: if isOwner(uid);
+    }
+
+    // --- Shared team workspace ----------------------------
+    // Everything a founder and their teammates need to see about each other:
+    // the roster, the AI cost ledger, and the price card. Deliberately
+    // separate from companies/{uid}, which stays owner-only.
+    match /orgs/{orgId} {
+      allow read: if isOrgOwner(orgId) || isOrgMember(orgId);
+      // A workspace is created by, and named after, its founder.
+      allow create: if signedIn()
+        && orgId == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOrgOwner(orgId);
+      allow delete: if false;
+
+      // --- Roster -----------------------------------------
+      match /members/{memberId} {
+        allow read: if isOrgOwner(orgId) || isOrgMember(orgId);
+
+        // The founder administers everyone.
+        allow create, update, delete: if isOrgOwner(orgId);
+
+        // Self-join. The invite code is the secret, and it is verified here
+        // rather than trusted from the client: the code must resolve to THIS
+        // workspace, the row must be the joiner's own, and the role is pinned
+        // to Team Member so nobody can promote themselves on the way in.
+        allow create: if signedIn()
+          && memberId == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.role == 'Team Member'
+          && exists(/databases/$(database)/documents/org_invites/$(request.resource.data.joinCode))
+          && get(/databases/$(database)/documents/org_invites/$(request.resource.data.joinCode))
+               .data.orgId == orgId;
+
+        // A member may maintain their own record (phone, linked mailbox) but
+        // cannot change their own role.
+        allow update: if signedIn()
+          && memberId == request.auth.uid
+          && request.resource.data.role == resource.data.role;
+      }
+
+      // --- AI cost ledger ---------------------------------
+      // Append-only: rows are written once and never edited or deleted, so a
+      // bill cannot be quietly rewritten after the fact. The founder reads
+      // everything; a teammate reads only their own rows.
+      match /usage/{entryId} {
+        allow read: if isOrgOwner(orgId)
+          || (isOrgMember(orgId) && resource.data.uid == request.auth.uid);
+        allow create: if isOrgMember(orgId)
+          && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // --- Price card -------------------------------------
+      match /settings/{docId} {
+        allow read: if isOrgOwner(orgId) || isOrgMember(orgId);
+        allow write: if isOrgOwner(orgId);
+      }
+    }
+
+    // --- Invite codes -------------------------------------
+    // Readable by any signed-in user, because someone joining a workspace has
+    // no access to it yet and this is how they resolve a code to a workspace.
+    // It holds no secrets — only the id and name of the workspace the code
+    // opens, and possession of the code is the thing being checked.
+    match /org_invites/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
     }
 
     // --- Community: members read, authors own their posts -
