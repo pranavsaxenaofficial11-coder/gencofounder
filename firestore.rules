@@ -3,63 +3,75 @@ rules_version = '2';
 // Deploy: Firebase Console -> Firestore Database ->
 // Rules -> paste -> Publish (project gencopilot-78024)
 //
-// Lines are deliberately short and ASCII-only. The console
-// mangles long lines on paste, which is what produces the
-// "Unexpected 'function'" class of parse errors. Document
-// paths are built with path() + concatenation so that no
-// single line ever carries a full path.
+// ASCII-only, and every line is kept short on purpose:
+// the console wraps long lines mid-token on paste, which
+// shows up as bogus "Unexpected ..." errors. Long document
+// paths sit alone inside get()/exists() and the helpers
+// take short parameter names to keep them that way.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---- identity -------------------------------------
     function signedIn() {
       return request.auth != null;
     }
+
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
 
-    // ---- path builders --------------------------------
-    function orgPath(o) {
-      return path('/databases/' + database +
-        '/documents/orgs/' + o);
-    }
-    function memberPath(o, u) {
-      return path('/databases/' + database +
-        '/documents/orgs/' + o + '/members/' + u);
-    }
-    function invitePath(c) {
-      return path('/databases/' + database +
-        '/documents/org_invites/' + c);
-    }
-    function convoPath(c) {
-      return path('/databases/' + database +
-        '/documents/conversations/' + c);
+    function orgOwnerUid(o) {
+      return get(
+        /databases/$(database)/documents/orgs/$(o)
+      ).data.ownerUid;
     }
 
-    // ---- workspace helpers ----------------------------
+    function memberExists(o, u) {
+      return exists(
+        /databases/$(database)/documents/orgs/$(o)/members/$(u)
+      );
+    }
+
+    function inviteExists(c) {
+      return exists(
+        /databases/$(database)/documents/org_invites/$(c)
+      );
+    }
+
+    function inviteOrg(c) {
+      return get(
+        /databases/$(database)/documents/org_invites/$(c)
+      ).data.orgId;
+    }
+
+    function convoParticipants(c) {
+      return get(
+        /databases/$(database)/documents/conversations/$(c)
+      ).data.participants;
+    }
+
     // A workspace id IS its founder's uid (ensureOrg in
     // src/org.js), so the common case is answered without
-    // reading a document. The get() is the fallback and is
-    // only reached for members, which keeps it off the
-    // owner's hot path.
+    // reading a document. The get() is the fallback and
+    // is only reached for members, which keeps it off
+    // the owner's hot path.
     function isOrgOwner(o) {
       return signedIn() && (
         request.auth.uid == o ||
-        get(orgPath(o)).data.ownerUid == request.auth.uid
+        orgOwnerUid(o) == request.auth.uid
       );
     }
+
     function isOrgMember(o) {
-      return signedIn() &&
-        exists(memberPath(o, request.auth.uid));
-    }
-    function isConvoParticipant(cid) {
-      return request.auth.uid in
-        get(convoPath(cid)).data.participants;
+      return signedIn()
+        && memberExists(o, request.auth.uid);
     }
 
-    // ---- users + notifications ------------------------
+    function isConvoParticipant(c) {
+      return request.auth.uid in convoParticipants(c);
+    }
+
+    // ---- users + notifications -----------------------
     match /users/{uid} {
       allow read: if signedIn();
       allow create, update: if isOwner(uid);
@@ -71,7 +83,7 @@ service cloud.firestore {
       }
     }
 
-    // ---- company workspace: private to the founder ----
+    // ---- company workspace: private to the founder ---
     // Covers companies/{uid} and every subcollection:
     // tasks, meetings, leads, feedback, clients,
     // investors, automations, metrics, chats, etc.
@@ -79,16 +91,14 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
-    // ---- shared team workspace ------------------------
-    // What a founder and their teammates need to see about
-    // each other: the roster, the AI cost ledger and the
-    // price card. Deliberately separate from
+    // ---- shared team workspace -----------------------
+    // What a founder and their teammates need to see
+    // about each other: the roster, the AI cost ledger
+    // and the price card. Deliberately separate from
     // companies/{uid}, which stays owner-only.
     match /orgs/{orgId} {
       allow read: if isOrgOwner(orgId)
         || isOrgMember(orgId);
-      // A workspace is created by, and named after, its
-      // founder.
       allow create: if signedIn()
         && orgId == request.auth.uid
         && request.resource.data.ownerUid
@@ -96,56 +106,58 @@ service cloud.firestore {
       allow update: if isOrgOwner(orgId);
       allow delete: if false;
 
-      // ---- roster ------------------------------------
+      // ---- roster ---------------------------------
       match /members/{memberId} {
         allow read: if isOrgOwner(orgId)
           || isOrgMember(orgId);
 
         // The founder administers everyone.
-        allow create, update, delete: if isOrgOwner(orgId);
+        allow create, update, delete:
+          if isOrgOwner(orgId);
 
-        // Self-join. The invite code is the secret, and it
-        // is verified here rather than trusted from the
-        // client: the code must resolve to THIS workspace,
-        // the row must be the joiner's own, and the role
-        // is pinned to Team Member so nobody can promote
-        // themselves on the way in.
+        // Self-join. The invite code is the secret and
+        // is verified here rather than trusted from
+        // the client: it must resolve to THIS
+        // workspace, the row must be the joiner's own,
+        // and the role is pinned to Team Member so
+        // nobody can promote themselves on the way in.
         allow create: if signedIn()
           && memberId == request.auth.uid
           && request.resource.data.uid
                == request.auth.uid
-          && request.resource.data.role == 'Team Member'
-          && exists(
-               invitePath(request.resource.data.joinCode)
-             )
-          && get(
-               invitePath(request.resource.data.joinCode)
-             ).data.orgId == orgId;
+          && request.resource.data.role
+               == 'Team Member'
+          && inviteExists(
+               request.resource.data.joinCode)
+          && inviteOrg(
+               request.resource.data.joinCode) == orgId;
 
-        // A member may maintain their own record (phone,
-        // linked mailbox) but cannot change their role.
+        // A member may maintain their own record
+        // (phone, linked mailbox) but cannot change
+        // their own role.
         allow update: if signedIn()
           && memberId == request.auth.uid
           && request.resource.data.role
                == resource.data.role;
       }
 
-      // ---- AI cost ledger ----------------------------
+      // ---- AI cost ledger -------------------------
       // Append-only: rows are written once and never
       // edited or deleted, so a bill cannot be quietly
       // rewritten after the fact. The founder reads
-      // everything; a teammate reads only their own rows.
+      // everything; a teammate reads only their own.
       match /usage/{entryId} {
         allow read: if isOrgOwner(orgId)
           || (isOrgMember(orgId)
-              && resource.data.uid == request.auth.uid);
+              && resource.data.uid
+                   == request.auth.uid);
         allow create: if isOrgMember(orgId)
           && request.resource.data.uid
                == request.auth.uid;
         allow update, delete: if false;
       }
 
-      // ---- price card --------------------------------
+      // ---- price card -----------------------------
       match /settings/{docId} {
         allow read: if isOrgOwner(orgId)
           || isOrgMember(orgId);
@@ -153,23 +165,23 @@ service cloud.firestore {
       }
     }
 
-    // ---- invite codes ---------------------------------
+    // ---- invite codes --------------------------------
     // Readable by any signed-in user, because someone
-    // joining a workspace has no access to it yet and this
-    // is how they resolve a code to a workspace. It holds
-    // no secrets: only the id and name of the workspace
-    // the code opens, and possession of the code is the
-    // thing being checked.
+    // joining has no access to the workspace yet and
+    // this is how they resolve a code to it. It holds no
+    // secrets, only the id and name, and possession of
+    // the code is the thing being checked.
     match /org_invites/{code} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.ownerUid
              == request.auth.uid;
       allow update, delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+        && resource.data.ownerUid
+             == request.auth.uid;
     }
 
-    // ---- community: members read, authors own posts ---
+    // ---- community: members read, authors own posts --
     match /community_posts/{postId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -177,7 +189,8 @@ service cloud.firestore {
              == request.auth.uid;
       allow update: if signedIn();
       allow delete: if signedIn()
-        && resource.data.authorId == request.auth.uid;
+        && resource.data.authorId
+             == request.auth.uid;
 
       match /comments/{commentId} {
         allow read: if signedIn();
@@ -190,16 +203,17 @@ service cloud.firestore {
       }
     }
 
-    // ---- talent directory: public, self-managed -------
+    // ---- talent directory: public, self-managed ------
     match /public_profiles/{uid} {
       allow read: if signedIn();
       allow create, update, delete: if isOwner(uid);
     }
 
-    // ---- direct messages: participants only -----------
+    // ---- direct messages: participants only ----------
     match /conversations/{convoId} {
       allow read: if signedIn()
-        && request.auth.uid in resource.data.participants;
+        && request.auth.uid
+             in resource.data.participants;
       allow create, update: if signedIn()
         && request.auth.uid
              in request.resource.data.participants;
@@ -213,7 +227,7 @@ service cloud.firestore {
       }
     }
 
-    // ---- contact form: submit only, no client reads ---
+    // ---- contact form: submit only, no client reads --
     match /contacts/{contactId} {
       allow create: if true;
       allow read, update, delete: if false;
